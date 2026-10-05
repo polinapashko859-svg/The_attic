@@ -27,7 +27,6 @@ exports.createSketch = async (req, res, next) => {
     try {
         const { title, content, author, paperType } = req.body;
 
-        // Валидация входных данных (статус 400)
         if (!title || !content) {
             return res.status(400).json({ error: "Пожалуйста, укажите заголовок и содержание наброска." });
         }

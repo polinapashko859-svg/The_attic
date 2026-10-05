@@ -1,12 +1,15 @@
+require('dotenv').config();
 const express = require('express');
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 
 const { sequelize } = require('./models');
 const sketchRoutes = require('./routes/sketchRoutes');
+const authRoutes = require('./routes/auth');
 
 app.use(express.json());
 
+app.use('/auth', authRoutes);
 app.use('/sketches', sketchRoutes);
 
 app.use((err, req, res, next) => {
