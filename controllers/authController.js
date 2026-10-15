@@ -21,7 +21,7 @@ exports.register = async (req, res, next) => {
         const newUser = await User.create({
             email,
             passwordHash,
-            role: role || 'user' // По умолчанию роль обычного пользователя
+            role: role || 'user' 
         });
 
         res.status(201).json({
@@ -79,7 +79,7 @@ exports.login = async (req, res, next) => {
 exports.getProfile = async (req, res, next) => {
     try {
         const user = await User.findByPk(req.user.id, {
-            attributes: { exclude: ['passwordHash'] } // Никогда не отдаем хеш пароля клиенту!
+            attributes: { exclude: ['passwordHash'] } 
         });
 
         if (!user) {
@@ -109,7 +109,7 @@ exports.deleteUser = async (req, res, next) => {
 exports.getAllUsers = async (req, res, next) => {
     try {
         const users = await User.findAll({
-            attributes: { exclude: ['passwordHash'] }, // Хеши паролей скрываем
+            attributes: { exclude: ['passwordHash'] }, 
             order: [['id', 'ASC']]
         });
         res.json(users);
@@ -118,16 +118,3 @@ exports.getAllUsers = async (req, res, next) => {
     }
 };
 
-exports.deleteUser = async (req, res, next) => {
-    try {
-        const user = await User.findByPk(req.params.id);
-        if (!user) {
-            return res.status(404).json({ error: "Пользователь не найден." });
-        }
-
-        await user.destroy();
-        res.json({ message: `Пользователь с ID ${req.params.id} успешно удален администратором.` });
-    } catch (err) {
-        next(err);
-    }
-};

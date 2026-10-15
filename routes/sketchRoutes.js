@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const sketchController = require('../controllers/sketchController');
-const { authMiddleware } = require('../middleware/auth'); // Подключаем защиту
+const { authMiddleware } = require('../middleware/auth'); 
 
 router.get('/', sketchController.getAllSketches);
 router.get('/:id', sketchController.getSketchById);

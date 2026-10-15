@@ -1,0 +1,59 @@
+<%- include('partials/header', { title: 'Лента набросков — The Attic' }) %>
+
+<div class="feed-header">
+    <h1 class="page-title">Уютная лента набросков</h1>
+    <p class="page-subtitle">Рукописные заметки, воспоминания и находки, найденные в укромных уголках чердака.</p>
+</div>
+
+<div class="card-grid-pinterest">
+    <% if (items && items.length > 0) { %>
+        <% items.forEach(item => { %>
+            <article class="sketch-card paper-card-<%= item.paperType %>">
+                <div class="card-header-user">
+                    <div class="author-avatar" title="<%= item.author %>">
+                        <%= item.author ? item.author[0].toUpperCase() : 'A' %>
+                    </div>
+                    <div class="author-info">
+                        <span class="author-name"><%= item.author %></span>
+                        <span class="post-time"><%= item.createdAt %></span>
+                    </div>
+                    <span class="tag-paper paper-<%= item.paperType %>"><%= item.paperType %></span>
+                </div>
+
+                <h2 class="sketch-title"><%= item.title %></h2>
+
+                <p class="sketch-content"><%= item.content %></p>
+
+                <% if (item.imageUrl) { %>
+                    <div class="sketch-image-wrapper">
+                        <img src="<%= item.imageUrl %>" alt="<%= item.title %>" loading="lazy">
+                    </div>
+                <% } %>
+
+                <div class="card-actions-bar">
+                    <a href="/item/<%= item.id %>#comments" class="action-btn" title="Отклики и комментарии">
+                        <svg class="action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                        <span><%= item.comments ? item.comments.length : 0 %></span>
+                    </a>
+
+                    <button type="button" class="action-btn warmth-btn" title="Подарить тепло">
+                        <span class="candle-icon">🕯️</span>
+                        <span><%= item.warmth || 18 %></span>
+                    </button>
+
+                    <button type="button" class="action-btn" title="Сохранить в личный архив">
+                        <svg class="action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/></svg>
+                    </button>
+
+                    <a href="/item/<%= item.id %>" class="action-btn read-btn" title="Открыть набросок отдельно">
+                        <svg class="action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14 21 3"/></svg>
+                    </a>
+                </div>
+            </article>
+        <% }) %>
+    <% } else { %>
+        <p style="color: #9c8978; text-align: center; grid-column: span 2;">На чердаке пока пусто.</p>
+    <% } %>
+</div>
+
+<%- include('partials/footer') %>

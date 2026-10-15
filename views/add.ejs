@@ -1,0 +1,74 @@
+<%- include('partials/header', { title: 'Новый набросок — The Attic' }) %>
+
+<div style="max-width: 680px; margin: 0 auto;">
+    <h1 class="page-title" style="font-size: 2.8rem;">Оставить набросок</h1>
+    <p class="page-subtitle">Добавьте новую мысль, заметку или архивную находку на чердак.</p>
+
+    <% if (typeof error !== 'undefined' && error) { %>
+        <div class="custom-alert-error">
+            <svg class="action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            <span><%= error %></span>
+        </div>
+    <% } %>
+
+    <form action="/add" method="POST" class="form-card" novalidate>
+        
+        <div class="form-group">
+            <label for="title">Заголовок наброска <span class="required-star">*</span></label>
+            <input type="text" id="title" name="title" class="form-control" 
+                   value="<%= typeof formData !== 'undefined' ? formData.title : '' %>" 
+                   placeholder="Например: Старинный компас с чердака">
+            <span class="field-hint">От 3 до 50 символов</span>
+        </div>
+
+        <div class="form-group">
+            <label for="author">Ваше имя или псевдоним <span class="required-star">*</span></label>
+            <input type="text" id="author" name="author" class="form-control" 
+                   value="<%= typeof formData !== 'undefined' ? formData.author : '' %>" 
+                   placeholder="Например: Polina">
+        </div>
+
+        <div class="form-row-2col">
+            <div class="form-group">
+                <label for="paperType">Фактура бумаги:</label>
+                <select id="paperType" name="paperType" class="form-control">
+                    <option value="parchment">📜 Пергамент (золотистый)</option>
+                    <option value="kraft">📦 Крафт (древесный)</option>
+                    <option value="linen">🧵 Лён (пепельно-серый)</option>
+                    <option value="pressed-flower">🌸 Сухоцвет (пыльная роза)</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="views">Начальные просмотры (≥ 0):</label>
+                <input type="number" id="views" name="views" class="form-control" min="0" 
+                       value="<%= typeof formData !== 'undefined' && formData.views ? formData.views : 0 %>">
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label for="imageUrl">Ссылка на изображение (необязательно):</label>
+            <input type="url" id="imageUrl" name="imageUrl" class="form-control" 
+                   value="<%= typeof formData !== 'undefined' && formData.imageUrl ? formData.imageUrl : '' %>" 
+                   placeholder="https://i.pinimg.com/...jpg">
+            <span class="field-hint">Вставьте прямую ссылку на фото из Pinterest или интернета</span>
+        </div>
+
+        <div class="form-group">
+            <label for="content">Текст наброска <span class="required-star">*</span></label>
+            <textarea id="content" name="content" rows="6" class="form-control" 
+                      placeholder="Опишите ваши мысли, найденные вещи или воспоминания..."><%= typeof formData !== 'undefined' ? formData.content : '' %></textarea>
+            <span class="field-hint">От 5 до 500 символов</span>
+        </div>
+
+        <div class="form-actions">
+            <button type="submit" class="btn-primary">
+                <svg class="action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+                Опубликовать набросок
+            </button>
+            <a href="/" class="btn-cancel">Отмена</a>
+        </div>
+    </form>
+</div>
+
+<%- include('partials/footer') %>

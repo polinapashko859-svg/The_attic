@@ -1,0 +1,86 @@
+<%- include('partials/header', { title: item.title + ' — The Attic' }) %>
+
+<div style="max-width: 760px; margin: 0 auto;">
+    <article class="sketch-card item-detail-card paper-card-<%= item.paperType %>">
+        
+        <div class="card-header-user">
+            <div class="author-avatar" title="<%= item.author %>">
+                <%= item.author ? item.author[0].toUpperCase() : 'A' %>
+            </div>
+            <div class="author-info">
+                <span class="author-name" style="font-size: 1.05rem;"><%= item.author %></span>
+                <span class="post-time"><%= item.createdAt %></span>
+            </div>
+            <span class="tag-paper paper-<%= item.paperType %>"><%= item.paperType %></span>
+        </div>
+
+        <h1 class="sketch-title" style="font-size: 2.7rem; margin: 15px 0 10px;"><%= item.title %></h1>
+        
+        <div class="sketch-meta" style="margin-bottom: 20px;">
+            <span class="meta-item">
+                <svg class="action-icon" viewBox="0 0 24 24" fill="none" stroke="#9c8978" stroke-width="2"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+                <%= item.views %> просмотров
+            </span>
+            <span class="meta-item">
+                <span class="candle-icon">🕯️</span>
+                <%= item.warmth || 18 %> тепла
+            </span>
+        </div>
+
+        <% if (item.imageUrl) { %>
+            <div class="sketch-image-wrapper" style="margin: 20px 0 25px;">
+                <img src="<%= item.imageUrl %>" alt="<%= item.title %>">
+            </div>
+        <% } %>
+
+        <div class="item-content-box"><%= item.content %></div>
+
+        <div class="item-detail-actions">
+            <a href="/" class="btn-back">
+                <svg class="action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 18-6-6 6-6"/></svg>
+                Вернуться в ленту
+            </a>
+
+            <a href="/messages?user=<%= encodeURIComponent(item.author) %>" class="btn-secondary" title="Написать личное сообщение">
+                <svg class="action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                Написать <%= item.author %>
+            </a>
+        </div>
+
+        <div class="comments-section" id="comments">
+            <h3 class="comments-title">Отклики на набросок (<%= item.comments ? item.comments.length : 0 %>)</h3>
+            
+            <% if (item.comments && item.comments.length > 0) { %>
+                <% item.comments.forEach(comment => { %>
+                    <div class="comment-item">
+                        <div class="comment-header">
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <div class="user-avatar-mini" style="width: 22px; height: 22px; font-size: 0.72rem;">
+                                    <%= comment.author ? comment.author[0].toUpperCase() : 'A' %>
+                                </div>
+                                <span class="comment-author"><%= comment.author %></span>
+                            </div>
+                            <span class="comment-date"><%= comment.createdAt %></span>
+                        </div>
+                        <p class="comment-text"><%= comment.text %></p>
+                    </div>
+                <% }) %>
+            <% } else { %>
+                <p style="color: #8c7c6f; font-size: 0.9rem; margin-bottom: 20px;">Пока никто не оставил отклика. Черкните пару слов автору первым!</p>
+            <% } %>
+
+            <form action="/item/<%= item.id %>/comment" method="POST" class="add-comment-form">
+                <div class="comment-input-row">
+                    <input type="text" name="commentAuthor" class="form-control" placeholder="Ваше имя" required>
+                    <input type="text" name="commentText" class="form-control" placeholder="Оставьте отклик, мысль или цитату..." required>
+                </div>
+                <button type="submit" class="btn-primary" style="align-self: flex-start; padding: 9px 20px; font-size: 0.88rem; margin-top: 4px;">
+                    Оставить отклик
+                </button>
+            </form>
+        </div>
+
+    </article>
+</div>
+
+<%- include('partials/footer') %>

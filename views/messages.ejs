@@ -1,0 +1,84 @@
+<%- include('partials/header', { title: 'Сообщения — The Attic' }) %>
+
+<div style="max-width: 980px; margin: 0 auto;">
+    <h1 class="page-title" style="font-size: 2.5rem; margin-bottom: 6px;">Личные сообщения</h1>
+    <p class="page-subtitle">Тайные записки и переписка с авторами чердака.</p>
+
+    <div class="messages-layout">
+        <aside class="dialogs-sidebar">
+            <div class="dialogs-header">Диалоги</div>
+            
+            <a href="/messages?user=Lydia" class="dialog-item <%= activeUser === 'Lydia' ? 'active' : '' %>">
+                <div class="dialog-avatar">L</div>
+                <div class="dialog-info">
+                    <div class="dialog-name-row">
+                        <span>Lydia</span>
+                        <span style="font-size: 0.72rem; color: #a3917f;">09:42</span>
+                    </div>
+                    <div class="dialog-last-msg">Спасибо за отзыв к утреннему кофе!</div>
+                </div>
+            </a>
+
+            <a href="/messages?user=Arthur" class="dialog-item <%= activeUser === 'Arthur' ? 'active' : '' %>">
+                <div class="dialog-avatar" style="background: #2a1f2b; border-color: #8c71a3;">A</div>
+                <div class="dialog-info">
+                    <div class="dialog-name-row">
+                        <span>Arthur</span>
+                        <span style="font-size: 0.72rem; color: #a3917f;">Вчера</span>
+                    </div>
+                    <div class="dialog-last-msg">Где ты нашла такую шкатулку?</div>
+                </div>
+            </a>
+
+            <a href="/messages?user=Polina" class="dialog-item <%= activeUser === 'Polina' ? 'active' : '' %>">
+                <div class="dialog-avatar" style="background: #4a1017; border-color: #c89f6d;">P</div>
+                <div class="dialog-info">
+                    <div class="dialog-name-row">
+                        <span>Polina</span>
+                        <span style="font-size: 0.72rem; color: #a3917f;">14:02</span>
+                    </div>
+                    <div class="dialog-last-msg">Стрелка компаса до сих пор указывает на север...</div>
+                </div>
+            </a>
+        </aside>
+
+        <section class="chat-window">
+            <div class="chat-header">
+                <div class="dialog-avatar" style="width: 34px; height: 34px; font-size: 1.1rem;">
+                    <%= activeUser[0] %>
+                </div>
+                <div>
+                    <strong style="color: #f7eee4;"><%= activeUser %></strong>
+                    <div style="font-size: 0.75rem; color: #78a87b;">● в сети на чердаке</div>
+                </div>
+            </div>
+
+            <div class="chat-history">
+                <div class="message-bubble message-in">
+                    Здравствуйте! Очень понравился ваш набросок про старый компас. Он правда ещё работает?
+                    <span class="message-time">14:15</span>
+                </div>
+
+                <div class="message-bubble message-out">
+                    Добрый день! Да, стрелка до сих пор уверенно находит север, хоть стекло и немного поцарапано временем.
+                    <span class="message-time">14:18</span>
+                </div>
+
+                <div class="message-bubble message-in">
+                    Невероятная вещь. Обязательно напишите продолжение истории!
+                    <span class="message-time">14:20</span>
+                </div>
+            </div>
+
+            <form action="/messages/send" method="POST" class="chat-input-area">
+                <input type="hidden" name="toUser" value="<%= activeUser %>">
+                <input type="text" name="messageText" class="form-control" placeholder="Напишите послание пером..." required>
+                <button type="submit" class="btn-primary" style="padding: 10px 18px;">
+                    Отправить
+                </button>
+            </form>
+        </section>
+    </div>
+</div>
+
+<%- include('partials/footer') %>

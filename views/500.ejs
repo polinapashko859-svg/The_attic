@@ -1,0 +1,22 @@
+<%- include('partials/header', { title: '500 — Сбой на чердаке' }) %>
+
+<div style="max-width: 680px; margin: 40px auto;">
+    <div class="error-card error-card-500">
+        <span class="error-code">500</span>
+        <h1 class="error-title">На чердаке перегорела лампа</h1>
+        <p class="error-subtitle">Внутренняя ошибка сервера. Мы уже зажгли свечи и выясняем, какой провод отошёл.</p>
+
+        <div class="error-tech-box">
+            <span class="error-tech-label">Диагностика:</span>
+            <code><%= typeof error !== 'undefined' && error.message ? error.message : 'Непредвиденное исключение в обработчике запроса' %></code>
+        </div>
+
+        <div style="margin-top: 30px;">
+            <a href="/" class="btn-primary">
+                ← Вернуться в уютную ленту
+            </a>
+        </div>
+    </div>
+</div>
+
+<%- include('partials/footer') %>
