@@ -1,0 +1,47 @@
+.stats-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  background: #181213;
+  border: 1px solid #362427;
+  padding: 12px 18px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  font-size: 0.9rem;
+}
+
+.stat-item span {
+  color: #a89687;
+}
+
+.stat-item strong {
+  color: #eedcc6;
+  margin-left: 5px;
+}
+
+.save-indicator {
+  color: #78a87b;
+  font-size: 0.82rem;
+  background: #141f15;
+  border: 1px solid #28442b;
+  padding: 4px 10px;
+  border-radius: 12px;
+}
+
+.loader-box {
+  text-align: center;
+  padding: 60px 20px;
+  color: #c89f6d;
+}
+
+.candle-flicker {
+  font-size: 3rem;
+  animation: flicker 1s infinite alternate ease-in-out;
+}
+
+@keyframes flicker {
+  0% { transform: scale(0.95); opacity: 0.7; }
+  100% { transform: scale(1.1); opacity: 1; filter: drop-shadow(0 0 12px #e5a76e); }
+}
