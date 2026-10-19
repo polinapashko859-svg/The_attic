@@ -41,8 +41,11 @@
 
             <div class="form-group">
                 <label for="views">Начальные просмотры (≥ 0):</label>
-                <input type="number" id="views" name="views" class="form-control" min="0" 
-                       value="<%= typeof formData !== 'undefined' && formData.views ? formData.views : 0 %>">
+                <input type="number" id="views" name="views" class="form-control" 
+                    min="0" max="1000000"
+                    oninput="if (this.value.length > 7) this.value = this.value.slice(0, 7);"
+                    value="<%= typeof formData !== 'undefined' && formData.views ? formData.views : 0 %>">
+                <span class="field-hint">Целое число от 0 до 1 000 000 (максимум 7 цифр)</span>
             </div>
         </div>
 

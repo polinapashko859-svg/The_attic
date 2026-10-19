@@ -17,7 +17,7 @@ app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 
 app.use(express.static(path.join(__dirname, 'public')));
-app.use(express.urlencoded({ extended: true }));
+app.use(express.urlencoded({ extended: true, limit: '50kb' }));
 app.use(express.json());
 
 app.use(requestLogger);
@@ -105,13 +105,32 @@ app.post('/add', (req, res) => {
     author = (author || '').trim();
     content = (content || '').trim();
     imageUrl = (imageUrl || '').trim() || null;
-    const viewsNum = Number(views);
+    const viewsRaw = String(views || '').trim();
+    
+    
+    if (viewsRaw.length > limits.views.maxDigits || !/^\d+$/.test(viewsRaw)) {
+        return res.status(400).render('add', {
+            title: 'Ошибка валидации',
+            error: limits.views.errorMessage,
+            formData: { title, author, paperType, views: 0, content, imageUrl }
+        });
+    }
+
+    const viewsNum = Number(viewsRaw);
+
+    if (!Number.isSafeInteger(viewsNum) || viewsNum < limits.views.min || viewsNum > limits.views.max) {
+        return res.status(400).render('add', {
+            title: 'Ошибка валидации',
+            error: limits.views.errorMessage,
+            formData: { title, author, paperType, views: 0, content, imageUrl }
+        });
+    }
 
     if (title.length < limits.title.minLength || title.length > limits.title.maxLength) {
         return res.status(400).render('add', {
             title: 'Ошибка валидации',
             error: limits.title.errorMessage,
-            formData: req.body
+            formData: { title: title.substring(0, 50), author, paperType, views: viewsNum, content: content.substring(0, 500), imageUrl }
         });
     }
 
@@ -119,15 +138,7 @@ app.post('/add', (req, res) => {
         return res.status(400).render('add', {
             title: 'Ошибка валидации',
             error: limits.author.errorMessage,
-            formData: req.body
-        });
-    }
-
-    if (isNaN(viewsNum) || viewsNum < limits.views.min) {
-        return res.status(400).render('add', {
-            title: 'Ошибка валидации',
-            error: limits.views.errorMessage,
-            formData: req.body
+            formData: { title, author: author.substring(0, 30), paperType, views: viewsNum, content: content.substring(0, 500), imageUrl }
         });
     }
 
@@ -135,7 +146,7 @@ app.post('/add', (req, res) => {
         return res.status(400).render('add', {
             title: 'Ошибка валидации',
             error: limits.content.errorMessage,
-            formData: req.body
+            formData: { title, author, paperType, views: viewsNum, content: content.substring(0, 500), imageUrl }
         });
     }
 
@@ -145,10 +156,10 @@ app.post('/add', (req, res) => {
         author,
         paperType: paperType || 'parchment',
         views: viewsNum,
-        warmth: 1, 
+        warmth: 1,
         imageUrl: imageUrl,
         content,
-        comments: [], 
+        comments: [],
         createdAt: new Date().toLocaleString('ru-RU')
     };
 
