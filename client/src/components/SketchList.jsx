@@ -1,22 +1,13 @@
 import { useState, useEffect } from 'react';
-import { initialSketches } from '../mockData';
+import { fetchSketches, addSketch, updateSketch, deleteSketch } from '../api';
 
 export default function SketchList() {
-  const [sketches, setSketches] = useState(() => {
-    try {
-      const saved = localStorage.getItem('attic_sketches');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-      }
-      return initialSketches;
-    } catch (e) {
-      return initialSketches;
-    }
-  });
+  const [sketches, setSketches] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [retryAttempt, setRetryAttempt] = useState(0);
 
-  const [isLoading, setIsLoading] = useState(true);
-  const [saveStatus, setSaveStatus] = useState('Сохранено');
+  const [toastMessage, setToastMessage] = useState(null);
 
   const [title, setTitle] = useState('');
   const [author, setAuthor] = useState('');
@@ -31,24 +22,46 @@ export default function SketchList() {
   const [filterPaper, setFilterPaper] = useState('all');
   const [sortBy, setSortBy] = useState('newest');
 
+  const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+  const loadSketchesWithRetry = async (maxRetries = 3, delay = 1000) => {
+    setLoading(true);
+    setError(null);
+    setRetryAttempt(0);
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        const response = await fetchSketches();
+        setSketches(response.data);
+        setLoading(false);
+        setRetryAttempt(0);
+        return;
+      } catch (err) {
+        if (attempt < maxRetries) {
+          setRetryAttempt(attempt);
+          await wait(delay);
+        } else {
+          console.error(err);
+          setError("Сервер недоступен после 3 попыток подключения. Проверьте соединение с портом 3000.");
+          setLoading(false);
+          setRetryAttempt(0);
+        }
+      }
+    }
+  };
+
   useEffect(() => {
-    const timer = setTimeout(() => setIsLoading(false), 800);
-    return () => clearTimeout(timer);
+    loadSketchesWithRetry();
   }, []);
 
   useEffect(() => {
-    setSaveStatus('Сохранение...');
-    const timeout = setTimeout(() => {
-      localStorage.setItem('attic_sketches', JSON.stringify(sketches));
-      setSaveStatus('Сохранено в localStorage');
-    }, 500);
-    return () => clearTimeout(timeout);
-  }, [sketches]);
-
-  // Заголовок вкладки
-  useEffect(() => {
     document.title = `Наброски (${sketches.length}) — The Attic`;
   }, [sketches.length]);
+
+  const showToast = (message) => {
+    setToastMessage(message);
+    setTimeout(() => setToastMessage(null), 4500);
+  };
 
   const resetForm = () => {
     setTitle('');
@@ -58,6 +71,67 @@ export default function SketchList() {
     setImageUrl('');
     setContent('');
     setEditingId(null);
+  };
+
+  const handleAdd = async (newSketchData) => {
+    const tempId = `temp-${Date.now()}`;
+    const optimisticSketch = {
+      ...newSketchData,
+      id: tempId,
+      createdAt: new Date().toLocaleString('ru-RU')
+    };
+
+    setSketches((prev) => [optimisticSketch, ...prev]);
+    resetForm();
+
+    try {
+      const response = await addSketch(newSketchData);
+      setSketches((prev) =>
+        prev.map((item) => (item.id === tempId ? response.data : item))
+      );
+    } catch (err) {
+      console.error(err);
+      setSketches((prev) => prev.filter((item) => item.id !== tempId));
+      showToast("Ошибка сервера: не удалось сохранить набросок. Изменение отменено.");
+    }
+  };
+
+  const handleDelete = async (id) => {
+    const sketchToDelete = sketches.find((item) => item.id === id);
+    if (!sketchToDelete) return;
+
+    if (!window.confirm("Удалить этот набросок из базы данных чердака?")) return;
+
+    setSketches((prev) => prev.filter((item) => item.id !== id));
+    if (editingId === id) resetForm();
+
+    try {
+      await deleteSketch(id);
+    } catch (err) {
+      console.error(err);
+      setSketches((prev) => [sketchToDelete, ...prev]);
+      showToast("Не удалось удалить набросок на сервере. Карточка восстановлена.");
+    }
+  };
+
+  const handleUpdate = async (updatedData) => {
+    const originalSketch = sketches.find((item) => item.id === updatedData.id);
+    if (!originalSketch) return;
+
+    setSketches((prev) =>
+      prev.map((item) => (item.id === updatedData.id ? { ...item, ...updatedData } : item))
+    );
+    resetForm();
+
+    try {
+      await updateSketch(updatedData.id, updatedData);
+    } catch (err) {
+      console.error(err);
+      setSketches((prev) =>
+        prev.map((item) => (item.id === originalSketch.id ? originalSketch : item))
+      );
+      showToast("Сервер отклонил изменения. Текст наброска возвращен к исходному.");
+    }
   };
 
   const handleSubmit = (e) => {
@@ -78,25 +152,9 @@ export default function SketchList() {
     };
 
     if (editingId !== null) {
-      setSketches((prev) =>
-        prev.map((item) => (item.id === editingId ? { ...item, ...payload } : item))
-      );
+      handleUpdate({ ...payload, id: editingId });
     } else {
-      const newSketch = {
-        ...payload,
-        id: Date.now(),
-        createdAt: new Date().toLocaleString('ru-RU')
-      };
-      setSketches((prev) => [newSketch, ...prev]);
-    }
-
-    resetForm();
-  };
-
-  const handleDelete = (id) => {
-    if (window.confirm("Удалить этот набросок с чердака?")) {
-      setSketches((prev) => prev.filter((item) => item.id !== id));
-      if (editingId === id) resetForm();
+      handleAdd(payload);
     }
   };
 
@@ -111,24 +169,12 @@ export default function SketchList() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const handleResetToDefault = () => {
-    localStorage.removeItem('attic_sketches');
-    setSketches(initialSketches);
-    setSearchQuery('');
-    setFilterPaper('all');
-  };
-
-  const totalReadingMinutes = sketches.reduce(
-    (acc, item) => acc + (Number(item.readingTime) || 0),
-    0
-  );
-
   const filteredSketches = sketches
     .filter((sketch) => {
       const matchesPaper = filterPaper === 'all' || sketch.paperType === filterPaper;
       const matchesSearch =
-        sketch.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        sketch.author.toLowerCase().includes(searchQuery.toLowerCase());
+        (sketch.title || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (sketch.author || '').toLowerCase().includes(searchQuery.toLowerCase());
       return matchesPaper && matchesSearch;
     })
     .sort((a, b) => {
@@ -140,21 +186,25 @@ export default function SketchList() {
 
   return (
     <div className="sketch-manager">
+      {toastMessage && (
+        <div className="toast-rollback-notification">
+          <span>{toastMessage}</span>
+          <button type="button" onClick={() => setToastMessage(null)}>✕</button>
+        </div>
+      )}
+
       <div className="stats-bar">
         <div className="stat-item">
-          <span>Всего набросков:</span> <strong>{sketches.length}</strong>
+          <span>Всего набросков в базе данных:</span> <strong>{sketches.length}</strong>
         </div>
-        <div className="stat-item">
-          <span>Время чтения всех заметок:</span> <strong>~{totalReadingMinutes} мин</strong>
-        </div>
-        <div className="save-indicator">
-          {saveStatus === 'Сохранение...' ? '⏳ Сохранение...' : '💾 Сохранено в localStorage'}
+        <div className="save-indicator" style={{ background: '#1c1b26', borderColor: '#483f6b', color: '#c5baf5' }}>
+          PostgreSQL REST API + Retry
         </div>
       </div>
 
       <form className="form-card" onSubmit={handleSubmit}>
         <h2 className="form-title">
-          {editingId ? "✏️ Редактирование наброска" : "📜 Оставить набросок на чердаке"}
+          {editingId ? "Редактирование наброска" : "Оставить набросок в базе"}
         </h2>
 
         <div className="form-group">
@@ -164,7 +214,7 @@ export default function SketchList() {
             className="form-control"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            placeholder="Например: Старинные карманные часы"
+            placeholder="Например: Старинный компас"
             required
           />
         </div>
@@ -189,10 +239,10 @@ export default function SketchList() {
               value={paperType}
               onChange={(e) => setPaperType(e.target.value)}
             >
-              <option value="parchment">📜 Пергамент (золотистый)</option>
-              <option value="kraft">📦 Крафт (древесный)</option>
-              <option value="linen">🧵 Лён (пепельный)</option>
-              <option value="pressed-flower">🌸 Сухоцвет (розовый)</option>
+              <option value="parchment">Пергамент</option>
+              <option value="kraft">Крафт</option>
+              <option value="linen">Лён</option>
+              <option value="pressed-flower">Сухоцвет</option>
             </select>
           </div>
 
@@ -235,7 +285,7 @@ export default function SketchList() {
 
         <div className="form-actions">
           <button type="submit" className="btn-primary">
-            {editingId ? "Сохранить изменения" : "Опубликовать набросок"}
+            {editingId ? "Сохранить на сервере" : "Опубликовать набросок"}
           </button>
           {editingId && (
             <button type="button" className="btn-cancel" onClick={resetForm}>
@@ -247,7 +297,7 @@ export default function SketchList() {
 
       <div className="filter-panel">
         <div className="filter-group">
-          <label>🔍 Живой поиск:</label>
+          <label>Живой поиск:</label>
           <input
             type="text"
             className="form-control"
@@ -258,7 +308,7 @@ export default function SketchList() {
         </div>
 
         <div className="filter-group">
-          <label>📜 Фактура бумаги:</label>
+          <label>Фактура бумаги:</label>
           <select
             className="form-control"
             value={filterPaper}
@@ -273,7 +323,7 @@ export default function SketchList() {
         </div>
 
         <div className="filter-group">
-          <label>⇅ Сортировка:</label>
+          <label>Сортировка:</label>
           <select
             className="form-control"
             value={sortBy}
@@ -286,10 +336,25 @@ export default function SketchList() {
         </div>
       </div>
 
-      {isLoading ? (
+      {loading ? (
         <div className="loader-box">
           <div className="candle-flicker">🕯️</div>
-          <p style={{ marginTop: '15px' }}>Зажигаем свечи на чердаке...</p>
+          <p style={{ marginTop: '15px' }}>
+            {retryAttempt > 0
+              ? `Повтор запроса к серверу: попытка ${retryAttempt} из 3...`
+              : "Загрузка набросков из базы данных..."}
+          </p>
+        </div>
+      ) : error ? (
+        <div className="empty-message-full" style={{ borderColor: '#8f212f', background: '#1c1012' }}>
+          <span style={{ fontSize: '3rem', display: 'block', marginBottom: '10px' }}>⚠️</span>
+          <h3 style={{ color: '#f8b4b4', marginBottom: '10px', fontSize: '1.4rem' }}>Связь с сервером отсутствует</h3>
+          <p style={{ color: '#a89687', marginBottom: '20px', maxWidth: '520px', margin: '0 auto 20px' }}>
+            {error}
+          </p>
+          <button type="button" className="btn-primary" onClick={() => loadSketchesWithRetry()} style={{ background: '#731924' }}>
+            Повторить попытку
+          </button>
         </div>
       ) : filteredSketches.length > 0 ? (
         <div className="card-grid-pinterest">
@@ -318,9 +383,8 @@ export default function SketchList() {
               )}
 
               <div className="card-actions-bar">
-                {/* ЛОГИЧНЫЙ БЕЙДЖ: ВРЕМЯ ЧТЕНИЯ ВМЕСТО ПРОСМОТРОВ */}
-                <span className="action-btn" title="Примерное время чтения">
-                  ⏳ <span>{sketch.readingTime || 2} мин чтения</span>
+                <span className="action-btn" title="Время чтения">
+                  ⏳ <span>{sketch.readingTime || 2} мин</span>
                 </span>
 
                 <button
@@ -329,7 +393,7 @@ export default function SketchList() {
                   onClick={() => handleStartEdit(sketch)}
                   title="Редактировать"
                 >
-                  ✏️ <span>Изменить</span>
+                  Изменить
                 </button>
 
                 <button
@@ -338,7 +402,7 @@ export default function SketchList() {
                   onClick={() => handleDelete(sketch.id)}
                   title="Удалить"
                 >
-                  🗑 <span>Удалить</span>
+                  Удалить
                 </button>
               </div>
             </article>
@@ -347,14 +411,8 @@ export default function SketchList() {
       ) : (
         <div className="empty-message-full">
           <p style={{ fontSize: '1.2rem', marginBottom: '10px' }}>
-            Ни одного наброска по заданным критериям не найдено.
+            В базе данных чердака пока нет подходящих набросков.
           </p>
-          <p style={{ color: '#8c7c6f', fontSize: '0.9rem', marginBottom: '18px' }}>
-            Возможно, активен фильтр или были удалены все записи.
-          </p>
-          <button type="button" className="btn-primary" onClick={handleResetToDefault}>
-            🔄 Восстановить начальные наброски
-          </button>
         </div>
       )}
     </div>
