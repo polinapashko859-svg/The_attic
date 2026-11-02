@@ -45,7 +45,7 @@ export default function SketchList() {
     return () => clearTimeout(timeout);
   }, [sketches]);
 
-  // Заголовок вкладки
+  
   useEffect(() => {
     document.title = `Наброски (${sketches.length}) — The Attic`;
   }, [sketches.length]);
