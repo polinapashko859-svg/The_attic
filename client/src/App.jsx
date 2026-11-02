@@ -1,8 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Routes, Route, Link, Navigate, useNavigate } from 'react-router-dom';
 import SketchList from './components/SketchList';
-import SketchForm from './components/SketchForm';
-import SketchDetail from './components/SketchDetail'; // Новый компонент
+import SketchDetail from './components/SketchDetail';
 import { loginUser, registerUser } from './api';
 import './index.css';
 
@@ -23,26 +22,29 @@ export default function App() {
   };
 
   return (
-    <>
+    <div className="app-layout">
       <header className="main-header">
         <div className="header-container">
           <Link to="/" className="logo">
-            <svg className="quill-logo-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+            <svg className="quill-logo-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
               <path d="M20.24 12.24a6 6 0 0 0-8.49-8.49L5 10.5V19h8.5z" />
+              <line x1="16" y1="8" x2="2" y2="22" />
+              <line x1="17.5" y1="15" x2="9" y2="15" />
             </svg>
             <span className="logo-text">The Attic</span>
           </Link>
 
           <nav className="header-nav">
             <Link to="/" className="nav-link">Лента</Link>
-            {user && <Link to="/create" className="nav-link">Написать</Link>}
           </nav>
 
           <div className="user-profile-menu">
             {user ? (
               <>
-                <span className="user-avatar-mini">{user.name ? user.name[0].toUpperCase() : user.email[0].toUpperCase()}</span>
-                <span className="user-email">{user.name || user.email}</span>
+                <div className="user-info">
+                  <span className="user-avatar-mini">{user.name ? user.name[0].toUpperCase() : user.email[0].toUpperCase()}</span>
+                  <span className="user-email">{user.name || user.email}</span>
+                </div>
                 <button onClick={handleLogout} className="btn-logout">Выйти</button>
               </>
             ) : (
@@ -56,12 +58,22 @@ export default function App() {
         <Routes>
           <Route path="/" element={<SketchList user={user} />} />
           <Route path="/auth" element={user ? <Navigate to="/" /> : <AuthPage setUser={setUser} />} />
-          <Route path="/create" element={user ? <SketchForm /> : <Navigate to="/auth" />} />
-          {/* Страница просмотра и редактирования */}
           <Route path="/sketch/:id" element={<SketchDetail user={user} />} />
         </Routes>
       </main>
-    </>
+
+      <footer className="main-footer">
+        <div className="footer-container">
+          <div className="footer-left">
+            <span className="footer-logo">The Attic</span>
+            <span className="footer-copy">© 2026. Уютное место для ваших мыслей.</span>
+          </div>
+          <div className="footer-right">
+            <span>Сделано с 🕯️ и любовью к винтажу</span>
+          </div>
+        </div>
+      </footer>
+    </div>
   );
 }
 

@@ -1,8 +1,23 @@
 const { Sketch, User } = require('../models');
+const { Op } = require('sequelize');
 
 exports.getAllSketches = async (req, res, next) => {
     try {
+        const { search } = req.query;
+        let whereCondition = {};
+
+        if (search) {
+            whereCondition = {
+                [Op.or]: [
+                    { title: { [Op.iLike]: `%${search}%` } },
+                    { content: { [Op.iLike]: `%${search}%` } },
+                    { author: { [Op.iLike]: `%${search}%` } }
+                ]
+            };
+        }
+
         const sketches = await Sketch.findAll({
+            where: whereCondition,
             include: [{ model: User, as: 'user', attributes: ['email'] }],
             order: [['id', 'DESC']]
         });

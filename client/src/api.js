@@ -16,12 +16,9 @@ api.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
-export const fetchSketches = () => api.get('/sketches');
-
+export const fetchSketches = (config = {}) => api.get('/sketches', config);
 export const addSketch = (sketchData) => api.post('/sketches', sketchData);
-
 export const updateSketch = (id, updatedData) => api.put(`/sketches/${id}`, updatedData);
-
 export const deleteSketch = (id) => api.delete(`/sketches/${id}`);
 
 export const loginUser = (credentials) => api.post('/auth/login', credentials);

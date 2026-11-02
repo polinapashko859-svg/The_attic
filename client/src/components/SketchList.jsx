@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { fetchSketches, deleteSketch } from '../api';
+import { fetchSketches, deleteSketch, addSketch } from '../api';
+import useDebounce from '../hooks/useDebounce'; // Мы создадим этот хук ниже
 
 const BRANCHES = [
   { id: 'all', label: 'Все ветки', icon: '🗂️' },
@@ -10,21 +11,36 @@ const BRANCHES = [
   { id: 'pressed-flower', label: 'Гербарий', icon: '🌸' }
 ];
 
+const PAPER_TYPES = [
+  { value: 'parchment', label: '📜 Старинные хроники' },
+  { value: 'kraft', label: '🧭 Дневник странника' },
+  { value: 'linen', label: '☕ Уютные мысли' },
+  { value: 'pressed-flower', label: '🌸 Гербарий воспоминаний' }
+];
+
 export default function SketchList({ user }) {
   const [sketches, setSketches] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [toastMessage, setToastMessage] = useState(null);
+  
   const [searchQuery, setSearchQuery] = useState('');
+  const debouncedSearch = useDebounce(searchQuery, 500); // Debounce 500мс
   const [filterPaper, setFilterPaper] = useState('all');
   const [sortBy, setSortBy] = useState('newest');
   
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [openMenuId, setOpenMenuId] = useState(null);
   
+  // Состояния для создания наброска (оптимистичное добавление)
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [newTitle, setNewTitle] = useState('');
+  const [newContent, setNewContent] = useState('');
+  const [newPaper, setNewPaper] = useState('parchment');
+  const [newImage, setNewImage] = useState('');
+
   const menuRef = useRef(null);
   const navigate = useNavigate();
-
-  const isAuth = !!user;
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -36,56 +52,116 @@ export default function SketchList({ user }) {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  // Используем AbortController для отмены запроса при размонтировании (Доп. улучшение)
   useEffect(() => {
-    loadSketches();
-  }, []);
+    const controller = new AbortController();
+    
+    const load = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const params = { signal: controller.signal };
+        if (debouncedSearch) params.params = { search: debouncedSearch };
+        
+        const response = await fetchSketches(params);
+        setSketches(response.data);
+      } catch (err) {
+        if (err.name !== 'CanceledError' && err.name !== 'AbortError') {
+          setError("Сервер недоступен или произошла ошибка.");
+        }
+      } finally {
+        setLoading(false);
+      }
+    };
 
-  const loadSketches = async () => {
-    setLoading(true);
-    try {
-      const response = await fetchSketches();
-      setSketches(response.data);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
+    load();
+
+    return () => {
+      controller.abort();
+    };
+  }, [debouncedSearch]);
 
   const showToast = (message) => {
     setToastMessage(message);
     setTimeout(() => setToastMessage(null), 3000);
   };
 
+  // --- ОПТИМИСТИЧНОЕ УДАЛЕНИЕ ---
   const confirmDelete = async () => {
     if (!deleteTarget) return;
     const sketchToDelete = deleteTarget;
     setDeleteTarget(null);
     setOpenMenuId(null);
 
+    // 1. Сразу убираем из списка
     setSketches((prev) => prev.filter((item) => item.id !== sketchToDelete.id));
 
     try {
+      // 2. Отправляем запрос
       await deleteSketch(sketchToDelete.id);
       showToast("Набросок удален");
     } catch (err) {
+      // 3. При ошибке возвращаем
       setSketches((prev) => [sketchToDelete, ...prev]);
-      showToast("Ошибка удаления");
+      showToast("Ошибка удаления. Набросок восстановлен.");
+    }
+  };
+
+  // --- ОПТИМИСТИЧНОЕ ДОБАВЛЕНИЕ ---
+  const handleCreate = async (e) => {
+    e.preventDefault();
+    if (!newTitle.trim() || !newContent.trim()) return;
+
+    const words = newContent.trim().split(/\s+/).length;
+    const readingTime = Math.ceil(words / 150) || 1;
+    const tempId = `temp-${Date.now()}`;
+
+    const optimisticSketch = {
+      id: tempId,
+      title: newTitle,
+      content: newContent,
+      author: user.name || "Аноним",
+      paperType: newPaper,
+      readingTime,
+      imageUrl: newImage || null,
+      createdAt: new Date().toISOString(),
+      userId: user.id
+    };
+
+    // 1. Сразу добавляем в начало списка
+    setSketches((prev) => [optimisticSketch, ...prev]);
+    setIsCreateOpen(false); // Закрываем модалку
+
+    // Очищаем форму
+    setNewTitle(''); setNewContent(''); setNewImage(''); setNewPaper('parchment');
+
+    try {
+      // 2. Отправляем POST
+      const response = await addSketch({
+        title: optimisticSketch.title,
+        content: optimisticSketch.content,
+        paperType: optimisticSketch.paperType,
+        readingTime: optimisticSketch.readingTime,
+        imageUrl: optimisticSketch.imageUrl
+      });
+
+      // 3. Заменяем временный ID на реальный
+      setSketches((prev) => 
+        prev.map(item => item.id === tempId ? response.data : item)
+      );
+      showToast("Набросок успешно создан!");
+    } catch (err) {
+      // 4. При ошибке удаляем из списка
+      setSketches((prev) => prev.filter(item => item.id !== tempId));
+      showToast("Ошибка при создании. Набросок не сохранен.");
     }
   };
 
   const filteredSketches = sketches
-    .filter((sketch) => {
-      const matchesPaper = filterPaper === 'all' || sketch.paperType === filterPaper;
-      const searchLower = searchQuery.toLowerCase();
-      const matchesSearch = 
-        (sketch.title || '').toLowerCase().includes(searchLower) ||
-        (sketch.content || '').toLowerCase().includes(searchLower);
-      return matchesPaper && matchesSearch;
-    })
+    .filter((sketch) => filterPaper === 'all' || sketch.paperType === filterPaper)
     .sort((a, b) => {
-      if (sortBy === 'newest') return b.id - a.id;
-      if (sortBy === 'oldest') return a.id - b.id;
+      if (sortBy === 'newest') return b.id.toString().localeCompare(a.id.toString());
+      if (sortBy === 'oldest') return a.id.toString().localeCompare(b.id.toString());
       if (sortBy === 'readingTime') return (b.readingTime || 0) - (a.readingTime || 0);
       return 0;
     });
@@ -94,6 +170,7 @@ export default function SketchList({ user }) {
     <div className="sketch-manager">
       {toastMessage && <div className="toast-rollback-notification">{toastMessage}</div>}
 
+      {/* МОДАЛКА УДАЛЕНИЯ */}
       {deleteTarget && (
         <div className="modal-overlay">
           <div className="modal-content">
@@ -107,18 +184,56 @@ export default function SketchList({ user }) {
         </div>
       )}
 
-      <div className="branches-nav">
-        {BRANCHES.map((branch) => (
-          <button
-            key={branch.id}
-            type="button"
-            className={`branch-tab ${filterPaper === branch.id ? 'active' : ''}`}
-            onClick={() => setFilterPaper(branch.id)}
-          >
-            <span className="branch-icon">{branch.icon}</span>
-            <span className="branch-label">{branch.label}</span>
+      {/* МОДАЛКА СОЗДАНИЯ */}
+      {isCreateOpen && (
+        <div className="modal-overlay">
+          <form className="modal-content" onSubmit={handleCreate} style={{ maxWidth: '600px', textAlign: 'left' }}>
+            <h3 style={{ textAlign: 'center' }}>Новый набросок</h3>
+            <div className="form-group">
+              <label>Заголовок:</label>
+              <input className="form-control" value={newTitle} onChange={e => setNewTitle(e.target.value)} required />
+            </div>
+            <div className="form-group">
+              <label>Ветка:</label>
+              <select className="form-control" value={newPaper} onChange={e => setNewPaper(e.target.value)}>
+                {PAPER_TYPES.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
+              </select>
+            </div>
+            <div className="form-group">
+              <label>Ссылка на фото:</label>
+              <input className="form-control" value={newImage} onChange={e => setNewImage(e.target.value)} />
+            </div>
+            <div className="form-group">
+              <label>Текст:</label>
+              <textarea className="form-control" rows="5" value={newContent} onChange={e => setNewContent(e.target.value)} required />
+            </div>
+            <div className="modal-actions">
+              <button type="submit" className="btn-primary">Опубликовать</button>
+              <button type="button" className="btn-cancel" onClick={() => setIsCreateOpen(false)}>Отмена</button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      <div className="branches-nav" style={{ justifyContent: 'space-between' }}>
+        <div style={{ display: 'flex', gap: '12px' }}>
+          {BRANCHES.map((branch) => (
+            <button
+              key={branch.id}
+              type="button"
+              className={`branch-tab ${filterPaper === branch.id ? 'active' : ''}`}
+              onClick={() => setFilterPaper(branch.id)}
+            >
+              <span className="branch-icon">{branch.icon}</span>
+              <span className="branch-label">{branch.label}</span>
+            </button>
+          ))}
+        </div>
+        {user && (
+          <button className="btn-primary" onClick={() => setIsCreateOpen(true)}>
+            + Написать
           </button>
-        ))}
+        )}
       </div>
 
       <div className="filter-panel">
@@ -126,7 +241,7 @@ export default function SketchList({ user }) {
           <input
             type="text"
             className="form-control"
-            placeholder="Поиск по всему тексту..."
+            placeholder="Поиск на сервере (по тексту, автору)..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />
@@ -142,6 +257,10 @@ export default function SketchList({ user }) {
 
       {loading ? (
         <div className="loader-box"><div className="candle-flicker">🕯️</div></div>
+      ) : error ? (
+        <div className="empty-message-full">
+          <p>{error}</p>
+        </div>
       ) : (
         <div className="card-grid-pinterest">
           {filteredSketches.map((sketch) => {
@@ -152,7 +271,7 @@ export default function SketchList({ user }) {
               <article 
                 key={sketch.id} 
                 className={`sketch-card paper-card-${sketch.paperType}`}
-                onClick={() => navigate(`/sketch/${sketch.id}`)}
+                onClick={() => !sketch.id.toString().startsWith('temp-') && navigate(`/sketch/${sketch.id}`)}
               >
                 <div className="card-header-user" onClick={(e) => e.stopPropagation()}>
                   <div className="author-avatar">{sketch.author ? sketch.author[0].toUpperCase() : 'A'}</div>
@@ -161,7 +280,7 @@ export default function SketchList({ user }) {
                     <span className="post-time">{new Date(sketch.createdAt).toLocaleString('ru-RU')}</span>
                   </div>
                   
-                  {canEdit && (
+                  {canEdit && !sketch.id.toString().startsWith('temp-') && (
                     <div className="card-menu-wrapper" ref={openMenuId === sketch.id ? menuRef : null}>
                       <button type="button" className="menu-dots-btn" onClick={(e) => { e.stopPropagation(); setOpenMenuId(openMenuId === sketch.id ? null : sketch.id); }}>
                         ⋮

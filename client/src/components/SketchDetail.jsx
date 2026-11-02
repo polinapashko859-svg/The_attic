@@ -52,8 +52,23 @@ export default function SketchDetail({ user }) {
   const estimatedTime = calculateReadingTime(editContent);
   const currentHint = PAPER_TYPES.find(p => p.value === editPaper)?.hint;
 
+  // --- ОПТИМИСТИЧНОЕ ОБНОВЛЕНИЕ ---
   const handleUpdate = async () => {
+    const originalSketch = { ...sketch }; // Сохраняем для отката
+
+    // 1. Обновляем UI моментально
+    setSketch({
+      ...sketch,
+      title: editTitle,
+      content: editContent,
+      paperType: editPaper,
+      imageUrl: editImageUrl.trim() || null,
+      readingTime: estimatedTime
+    });
+    setIsEditing(false);
+
     try {
+      // 2. Отправляем PUT
       await api.put(`/sketches/${id}`, {
         title: editTitle,
         content: editContent,
@@ -61,10 +76,11 @@ export default function SketchDetail({ user }) {
         readingTime: estimatedTime,
         imageUrl: editImageUrl.trim() || null
       });
-      setIsEditing(false);
-      fetchSketch();
     } catch (err) {
-      alert("Ошибка при сохранении");
+      // 3. Откат при ошибке
+      setSketch(originalSketch);
+      setIsEditing(true); // Возвращаем в режим редактирования
+      alert("Не удалось сохранить изменения. Вернули как было.");
     }
   };
 
