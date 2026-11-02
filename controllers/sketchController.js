@@ -1,9 +1,10 @@
-const { Sketch } = require('../models');
+const { Sketch, User } = require('../models');
 
 exports.getAllSketches = async (req, res, next) => {
     try {
         const sketches = await Sketch.findAll({
-            order: [['id', 'ASC']]
+            include: [{ model: User, as: 'user', attributes: ['email'] }],
+            order: [['id', 'DESC']]
         });
         res.json(sketches);
     } catch (err) {
@@ -13,7 +14,9 @@ exports.getAllSketches = async (req, res, next) => {
 
 exports.getSketchById = async (req, res, next) => {
     try {
-        const sketch = await Sketch.findByPk(req.params.id);
+        const sketch = await Sketch.findByPk(req.params.id, {
+            include: [{ model: User, as: 'user', attributes: ['email'] }]
+        });
         if (!sketch) {
             return res.status(404).json({ error: "Набросок не найден в архивах чердака." });
         }
@@ -25,17 +28,22 @@ exports.getSketchById = async (req, res, next) => {
 
 exports.createSketch = async (req, res, next) => {
     try {
-        const { title, content, author, paperType } = req.body;
+        const { title, content, paperType, readingTime, imageUrl } = req.body;
 
         if (!title || !content) {
             return res.status(400).json({ error: "Пожалуйста, укажите заголовок и содержание наброска." });
         }
 
+        const user = await User.findByPk(req.user.id);
+
         const newSketch = await Sketch.create({
             title,
             content,
-            author: author || "Аноним",
-            paperType: paperType || "parchment"
+            author: user.name || "Аноним",
+            paperType: paperType || "parchment",
+            readingTime: readingTime || 2,
+            imageUrl: imageUrl || null,
+            userId: req.user.id
         });
 
         res.status(201).json(newSketch);
@@ -46,7 +54,7 @@ exports.createSketch = async (req, res, next) => {
 
 exports.updateSketch = async (req, res, next) => {
     try {
-        const { title, content, author, paperType } = req.body;
+        const { title, content, author, paperType, readingTime, imageUrl } = req.body;
 
         if (!title || !content) {
             return res.status(400).json({ error: "Данные для обновления неполные." });
@@ -57,11 +65,17 @@ exports.updateSketch = async (req, res, next) => {
             return res.status(404).json({ error: "Не удается обновить: набросок не найден." });
         }
 
+        if (sketch.userId !== req.user.id && req.user.role !== 'admin') {
+            return res.status(403).json({ error: "Вы можете редактировать только свои наброски." });
+        }
+
         await sketch.update({
             title,
             content,
             author: author || sketch.author,
-            paperType: paperType || sketch.paperType
+            paperType: paperType || sketch.paperType,
+            readingTime: readingTime !== undefined ? readingTime : sketch.readingTime,
+            imageUrl: imageUrl !== undefined ? imageUrl : sketch.imageUrl
         });
 
         res.json(sketch);
@@ -74,11 +88,16 @@ exports.deleteSketch = async (req, res, next) => {
     try {
         const sketch = await Sketch.findByPk(req.params.id);
         if (!sketch) {
-            return res.status(404).json({ error: "Не удается удалить: набросок не найден." });
+            return res.status(404).json({ error: "Набросок не найден." });
+        }
+
+        // Строгая проверка: удалять может только владелец или админ
+        if (sketch.userId !== req.user.id && req.user.role !== 'admin') {
+            return res.status(403).json({ error: "Вы можете удалять только свои наброски." });
         }
 
         await sketch.destroy();
-        res.json({ message: "Набросок успешно удален из архива чердака.", sketch });
+        res.json({ message: "Удалено." });
     } catch (err) {
         next(err);
     }

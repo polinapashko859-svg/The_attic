@@ -4,7 +4,7 @@ const { User } = require('../models');
 
 exports.register = async (req, res, next) => {
     try {
-        const { email, password, role } = req.body;
+        const { email, password, name, role } = req.body;
 
         if (!email || !password) {
             return res.status(400).json({ error: "Пожалуйста, укажите email и пароль." });
@@ -12,16 +12,16 @@ exports.register = async (req, res, next) => {
 
         const existingUser = await User.findOne({ where: { email } });
         if (existingUser) {
-            return res.status(400).json({ error: "Пользователь с таким email уже зарегистрирован на чердаке." });
+            return res.status(400).json({ error: "Пользователь с таким email уже зарегистрирован." });
         }
 
-        const saltRounds = 10;
-        const passwordHash = await bcrypt.hash(password, saltRounds);
+        const passwordHash = await bcrypt.hash(password, 10);
 
         const newUser = await User.create({
             email,
             passwordHash,
-            role: role || 'user' // По умолчанию роль обычного пользователя
+            name: name || "Аноним",
+            role: role || 'user'
         });
 
         res.status(201).json({
@@ -29,8 +29,8 @@ exports.register = async (req, res, next) => {
             user: {
                 id: newUser.id,
                 email: newUser.email,
-                role: newUser.role,
-                createdAt: newUser.createdAt
+                name: newUser.name,
+                role: newUser.role
             }
         });
     } catch (err) {
@@ -68,6 +68,7 @@ exports.login = async (req, res, next) => {
             user: {
                 id: user.id,
                 email: user.email,
+                name: user.name,
                 role: user.role
             }
         });
