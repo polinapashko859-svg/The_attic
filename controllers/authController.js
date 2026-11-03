@@ -110,7 +110,7 @@ exports.deleteUser = async (req, res, next) => {
 exports.getAllUsers = async (req, res, next) => {
     try {
         const users = await User.findAll({
-            attributes: { exclude: ['passwordHash'] }, // Хеши паролей скрываем
+            attributes: { exclude: ['passwordHash'] }, 
             order: [['id', 'ASC']]
         });
         res.json(users);

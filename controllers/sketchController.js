@@ -106,7 +106,6 @@ exports.deleteSketch = async (req, res, next) => {
             return res.status(404).json({ error: "Набросок не найден." });
         }
 
-        // Строгая проверка: удалять может только владелец или админ
         if (sketch.userId !== req.user.id && req.user.role !== 'admin') {
             return res.status(403).json({ error: "Вы можете удалять только свои наброски." });
         }
