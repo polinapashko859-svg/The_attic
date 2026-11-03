@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { fetchSketches, deleteSketch, addSketch } from '../api';
-import useDebounce from '../hooks/useDebounce'; // Мы создадим этот хук ниже
+import useDebounce from '../hooks/useDebounce'; 
 
 const BRANCHES = [
   { id: 'all', label: 'Все ветки', icon: '🗂️' },
@@ -25,14 +25,13 @@ export default function SketchList({ user }) {
   const [toastMessage, setToastMessage] = useState(null);
   
   const [searchQuery, setSearchQuery] = useState('');
-  const debouncedSearch = useDebounce(searchQuery, 500); // Debounce 500мс
+  const debouncedSearch = useDebounce(searchQuery, 500); 
   const [filterPaper, setFilterPaper] = useState('all');
   const [sortBy, setSortBy] = useState('newest');
   
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [openMenuId, setOpenMenuId] = useState(null);
   
-  // Состояния для создания наброска (оптимистичное добавление)
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [newTitle, setNewTitle] = useState('');
   const [newContent, setNewContent] = useState('');
@@ -52,7 +51,6 @@ export default function SketchList({ user }) {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Используем AbortController для отмены запроса при размонтировании (Доп. улучшение)
   useEffect(() => {
     const controller = new AbortController();
     
@@ -86,28 +84,23 @@ export default function SketchList({ user }) {
     setTimeout(() => setToastMessage(null), 3000);
   };
 
-  // --- ОПТИМИСТИЧНОЕ УДАЛЕНИЕ ---
   const confirmDelete = async () => {
     if (!deleteTarget) return;
     const sketchToDelete = deleteTarget;
     setDeleteTarget(null);
     setOpenMenuId(null);
 
-    // 1. Сразу убираем из списка
     setSketches((prev) => prev.filter((item) => item.id !== sketchToDelete.id));
 
     try {
-      // 2. Отправляем запрос
       await deleteSketch(sketchToDelete.id);
       showToast("Набросок удален");
     } catch (err) {
-      // 3. При ошибке возвращаем
       setSketches((prev) => [sketchToDelete, ...prev]);
       showToast("Ошибка удаления. Набросок восстановлен.");
     }
   };
 
-  // --- ОПТИМИСТИЧНОЕ ДОБАВЛЕНИЕ ---
   const handleCreate = async (e) => {
     e.preventDefault();
     if (!newTitle.trim() || !newContent.trim()) return;
@@ -128,15 +121,12 @@ export default function SketchList({ user }) {
       userId: user.id
     };
 
-    // 1. Сразу добавляем в начало списка
     setSketches((prev) => [optimisticSketch, ...prev]);
-    setIsCreateOpen(false); // Закрываем модалку
+    setIsCreateOpen(false); 
 
-    // Очищаем форму
     setNewTitle(''); setNewContent(''); setNewImage(''); setNewPaper('parchment');
 
     try {
-      // 2. Отправляем POST
       const response = await addSketch({
         title: optimisticSketch.title,
         content: optimisticSketch.content,
@@ -145,13 +135,11 @@ export default function SketchList({ user }) {
         imageUrl: optimisticSketch.imageUrl
       });
 
-      // 3. Заменяем временный ID на реальный
       setSketches((prev) => 
         prev.map(item => item.id === tempId ? response.data : item)
       );
       showToast("Набросок успешно создан!");
     } catch (err) {
-      // 4. При ошибке удаляем из списка
       setSketches((prev) => prev.filter(item => item.id !== tempId));
       showToast("Ошибка при создании. Набросок не сохранен.");
     }
@@ -170,7 +158,6 @@ export default function SketchList({ user }) {
     <div className="sketch-manager">
       {toastMessage && <div className="toast-rollback-notification">{toastMessage}</div>}
 
-      {/* МОДАЛКА УДАЛЕНИЯ */}
       {deleteTarget && (
         <div className="modal-overlay">
           <div className="modal-content">
@@ -184,7 +171,6 @@ export default function SketchList({ user }) {
         </div>
       )}
 
-      {/* МОДАЛКА СОЗДАНИЯ */}
       {isCreateOpen && (
         <div className="modal-overlay">
           <form className="modal-content" onSubmit={handleCreate} style={{ maxWidth: '600px', textAlign: 'left' }}>
