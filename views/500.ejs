@@ -1,22 +1,23 @@
-<%- include('partials/header', { title: '500 — Сбой на чердаке' }) %>
-
-<div style="max-width: 680px; margin: 40px auto;">
-    <div class="error-card error-card-500">
-        <span class="error-code">500</span>
-        <h1 class="error-title">На чердаке перегорела лампа</h1>
-        <p class="error-subtitle">Внутренняя ошибка сервера. Мы уже зажгли свечи и выясняем, какой провод отошёл.</p>
-
-        <div class="error-tech-box">
-            <span class="error-tech-label">Диагностика:</span>
-            <code><%= typeof error !== 'undefined' && error.message ? error.message : 'Непредвиденное исключение в обработчике запроса' %></code>
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>500 — Сбой на чердаке</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <main class="container">
+        <div style="max-width: 680px; margin: 40px auto;">
+            <section class="error-card error-card-500">
+                <span class="error-code">500</span>
+                <h1 class="error-title">На чердаке перегорела лампа</h1>
+                <p class="error-subtitle">Внутренняя ошибка сервера. Проверьте подключение к базе данных и повторите запрос.</p>
+                <div style="margin-top: 30px;">
+                    <a href="/" class="btn-primary">← Вернуться в ленту</a>
+                </div>
+            </section>
         </div>
-
-        <div style="margin-top: 30px;">
-            <a href="/" class="btn-primary">
-                ← Вернуться в уютную ленту
-            </a>
-        </div>
-    </div>
-</div>
-
-<%- include('partials/footer') %>
+    </main>
+</body>
+</html>

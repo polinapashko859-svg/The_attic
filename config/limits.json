@@ -12,12 +12,35 @@
   "content": {
     "minLength": 5,
     "maxLength": 500,
-    "errorMessage": "Текст наброска должен содержать от 5 до 500 символов."
+    "errorMessage": "Текст публикации должен содержать от 5 до 500 символов."
   },
-  "views": {
-    "min": 0,
-    "max": 1000000,
-    "maxDigits": 7,
-    "errorMessage": "Количество просмотров должно быть целым неотрицательным числом (≥ 0)."
-  }
+  "imageUrl": {
+    "maxLength": 2048,
+    "errorMessage": "Ссылка на изображение не должна превышать 2048 символов."
+  },
+  "commentAuthor": {
+    "minLength": 2,
+    "maxLength": 30,
+    "errorMessage": "Имя автора комментария должно содержать от 2 до 30 символов."
+  },
+  "commentText": {
+    "minLength": 1,
+    "maxLength": 500,
+    "errorMessage": "Комментарий должен содержать от 1 до 500 символов и не состоять только из пробелов."
+  },
+  "messageUser": {
+    "minLength": 1,
+    "maxLength": 30,
+    "errorMessage": "Имя собеседника должно содержать от 1 до 30 символов."
+  },
+  "messageText": {
+    "minLength": 1,
+    "maxLength": 1000,
+    "errorMessage": "Сообщение должно содержать от 1 до 1000 символов."
+  },
+  "paperTypes": ["parchment", "kraft", "linen", "pressed-flower"],
+  "paperTypeErrorMessage": "Выберите один из доступных видов бумаги.",
+  "readingSpeedWpm": 200,
+  "requestBodyLimit": "32kb",
+  "requestParameterLimit": 20
 }

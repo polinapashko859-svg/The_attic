@@ -1,252 +1,329 @@
 require('dotenv').config();
 const express = require('express');
 const path = require('path');
-const app = express();
-const PORT = process.env.PORT || 3000;
-
-const { sequelize } = require('./models');
+const { Op } = require('sequelize');
+const { sequelize, Sketch, Comment, Message } = require('./models');
 const sketchRoutes = require('./routes/sketchRoutes');
 const authRoutes = require('./routes/auth');
-
 const requestLogger = require('./middleware/logger');
 const authSimulation = require('./middleware/authSim');
-
 const limits = require('./config/limits.json');
+
+const app = express();
+const PORT = process.env.PORT || 3000;
+const allowedPaperTypes = limits.paperTypes;
 
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 
 app.use(express.static(path.join(__dirname, 'public')));
-app.use(express.urlencoded({ extended: true, limit: '50kb' }));
-app.use(express.json());
-
+app.use(express.urlencoded({
+    extended: true,
+    limit: limits.requestBodyLimit,
+    parameterLimit: limits.requestParameterLimit
+}));
+app.use(express.json({ limit: limits.requestBodyLimit }));
 app.use(requestLogger);
 app.use(authSimulation);
+app.use((req, res, next) => {
+    res.locals.currentPath = req.path;
+    next();
+});
 
 app.use('/auth', authRoutes);
 app.use('/sketches', sketchRoutes);
 
-let items = [
-    {
-        id: 1,
-        title: "Утренний кофе у окна чердака",
-        content: "Запах свежемолотых зерен арабики, раскрытый томик стихов и капли дождя на мутном стекле. Кажется, время здесь замедляет свой ход.",
-        author: "Lydia",
-        paperType: "parchment",
-        views: 142,
-        warmth: 24,
-        imageUrl: "https://i.pinimg.com/736x/6f/8b/a3/6f8ba3fe964c320819af9b0d8aadcb3c.jpg",
-        createdAt: "14.10.2026, 09:15",
-        comments: [
-            { id: 1, author: "Arthur", text: "Очень атмосферно написано, захотелось сварить кофе.", createdAt: "14.10.2026, 10:04" }
-        ]
-    },
-    {
-        id: 2,
-        title: "Забытая шкатулка с письмами",
-        content: "Нашла в углу под дубовой балкой резную шкатулку. Внутри пожелтевшие открытки со штемпелями 1954 года и высохший вереск.",
-        author: "Polina",
-        paperType: "kraft",
-        views: 218,
-        warmth: 56,
-        imageUrl: "https://i.pinimg.com/736x/b5/94/cf/b594cf49f8e2682ee4524ff6a182e9ec.jpg",
-        createdAt: "14.10.2026, 11:40",
-        comments: [
-            { id: 1, author: "Lydia", text: "Какая находка! Обязательно сохрани эти открытки.", createdAt: "14.10.2026, 12:15" }
-        ]
-    },
-    {
-        id: 3,
-        title: "Мысли в полночь без чернил",
-        content: "Иногда лучшие идеи приходят тогда, когда свеча уже почти догорела, а перо царапает пустой лист. Никаких картинок — только чистая мысль.",
-        author: "Arthur",
-        paperType: "linen",
-        views: 89,
-        warmth: 19,
-        imageUrl: null, 
-        createdAt: "14.10.2026, 23:55",
-        comments: []
-    },
-    {
-        id: 4,
-        title: "Старый латунный компас",
-        content: "Стрелка компаса дрожит, но упорно указывает на север, как и сто лет назад. Интересно, чьи карманы он грел во время морских странствий?",
-        author: "Polina",
-        paperType: "pressed-flower",
-        views: 175,
-        warmth: 43,
-        imageUrl: "https://i.pinimg.com/1200x/7a/9b/8c/7a9b8cfd4dee0f77e91313a9df778c7a.jpg",
-        createdAt: "14.10.2026, 14:02",
-        comments: [
-            { id: 1, author: "VintageMuse", text: "Вещи с историей обладают особой душой.", createdAt: "14.10.2026, 15:30" }
-        ]
-    }
-];
+const countWords = (text) => (text.match(/[\p{L}\p{N}]+/gu) || []).length;
 
-app.get('/', (req, res) => {
-    res.render('index', {
-        title: 'Главная — The Attic',
-        items: items
-    });
+const paperTypes = {
+    parchment: { className: 'parchment', label: 'Пергамент' },
+    kraft: { className: 'kraft', label: 'Крафт' },
+    linen: { className: 'linen', label: 'Лён' },
+    'pressed-flower': { className: 'pressed-flower', label: 'Сухоцветы' },
+    'handmade-cotton': { className: 'linen', label: 'Хлопковая бумага' }
+};
+
+const withDisplayData = (record) => {
+    const item = record.get ? record.get({ plain: true }) : { ...record };
+    const createdAt = new Date(item.createdAt);
+    const paperType = paperTypes[String(item.paperType || '').toLowerCase()] || paperTypes.parchment;
+    item.createdAtLabel = `${createdAt.toLocaleString('ru-RU', {
+        dateStyle: 'short',
+        timeStyle: 'medium'
+    })}.${String(createdAt.getMilliseconds()).padStart(3, '0')} (№${item.id})`;
+    item.readingMinutes = Math.max(1, Math.ceil(countWords(item.content || '') / limits.readingSpeedWpm));
+    item.paperTypeClass = paperType.className;
+    item.paperTypeLabel = paperType.label;
+    return item;
+};
+
+const validateText = (value, rule) => {
+    if (typeof value !== 'string') {
+        return rule.errorMessage;
+    }
+
+    const trimmed = value.trim();
+    if (trimmed.length < rule.minLength || trimmed.length > rule.maxLength) {
+        return rule.errorMessage;
+    }
+
+    return null;
+};
+
+const renderAddForm = (res, status, error, formData) => res.status(status).render('add', {
+    title: 'Добавить публикацию — The Attic',
+    error,
+    formData,
+    readingSpeedWpm: limits.readingSpeedWpm
+});
+
+app.get('/', async (req, res, next) => {
+    try {
+        const sketches = await Sketch.findAll({
+            include: [{ model: Comment, as: 'comments' }],
+            order: [['createdAt', 'DESC'], ['id', 'DESC']]
+        });
+
+        res.render('index', {
+            title: 'Главная — The Attic',
+            items: sketches.map(withDisplayData)
+        });
+    } catch (error) {
+        next(error);
+    }
 });
 
 app.get('/add', (req, res) => {
     res.render('add', {
-        title: 'Добавить набросок — The Attic',
+        title: 'Новая публикация — The Attic',
         error: null,
-        formData: {}
+        formData: {},
+        readingSpeedWpm: limits.readingSpeedWpm
     });
 });
 
-app.post('/add', (req, res) => {
-    let { title, author, paperType, views, content, imageUrl } = req.body;
-
-    title = (title || '').trim();
-    author = (author || '').trim();
-    content = (content || '').trim();
-    imageUrl = (imageUrl || '').trim() || null;
-    const viewsRaw = String(views || '').trim();
-    
-    
-    if (viewsRaw.length > limits.views.maxDigits || !/^\d+$/.test(viewsRaw)) {
-        return res.status(400).render('add', {
-            title: 'Ошибка валидации',
-            error: limits.views.errorMessage,
-            formData: { title, author, paperType, views: 0, content, imageUrl }
-        });
-    }
-
-    const viewsNum = Number(viewsRaw);
-
-    if (!Number.isSafeInteger(viewsNum) || viewsNum < limits.views.min || viewsNum > limits.views.max) {
-        return res.status(400).render('add', {
-            title: 'Ошибка валидации',
-            error: limits.views.errorMessage,
-            formData: { title, author, paperType, views: 0, content, imageUrl }
-        });
-    }
-
-    if (title.length < limits.title.minLength || title.length > limits.title.maxLength) {
-        return res.status(400).render('add', {
-            title: 'Ошибка валидации',
-            error: limits.title.errorMessage,
-            formData: { title: title.substring(0, 50), author, paperType, views: viewsNum, content: content.substring(0, 500), imageUrl }
-        });
-    }
-
-    if (author.length < limits.author.minLength || author.length > limits.author.maxLength) {
-        return res.status(400).render('add', {
-            title: 'Ошибка валидации',
-            error: limits.author.errorMessage,
-            formData: { title, author: author.substring(0, 30), paperType, views: viewsNum, content: content.substring(0, 500), imageUrl }
-        });
-    }
-
-    if (content.length < limits.content.minLength || content.length > limits.content.maxLength) {
-        return res.status(400).render('add', {
-            title: 'Ошибка валидации',
-            error: limits.content.errorMessage,
-            formData: { title, author, paperType, views: viewsNum, content: content.substring(0, 500), imageUrl }
-        });
-    }
-
-    const newItem = {
-        id: items.length > 0 ? items[items.length - 1].id + 1 : 1,
-        title,
-        author,
-        paperType: paperType || 'parchment',
-        views: viewsNum,
-        warmth: 1,
-        imageUrl: imageUrl,
-        content,
-        comments: [],
-        createdAt: new Date().toLocaleString('ru-RU')
+app.post('/add', async (req, res, next) => {
+    const { title, author, paperType, content } = req.body;
+    const imageUrl = typeof req.body.imageUrl === 'string' ? req.body.imageUrl.trim() : '';
+    const formData = {
+        title: typeof title === 'string' ? title.trim() : '',
+        author: typeof author === 'string' ? author.trim() : '',
+        paperType,
+        content: typeof content === 'string' ? content.trim() : '',
+        imageUrl
     };
 
-    items.push(newItem);
-    res.redirect('/');
-});
-
-app.get('/item/:id', (req, res, next) => {
-    const itemId = parseInt(req.params.id, 10);
-    const item = items.find(i => i.id === itemId);
-
-    if (!item) {
-        return next(); 
-    }
-
-    res.render('item', {
-        title: `${item.title} — The Attic`,
-        item: item
-    });
-});
-
-app.post('/item/:id/comment', (req, res) => {
-    const itemId = parseInt(req.params.id, 10);
-    const item = items.find(i => i.id === itemId);
-
-    if (item) {
-        if (!item.comments) item.comments = [];
-        
-        const author = (req.body.commentAuthor || 'Аноним').trim();
-        const text = (req.body.commentText || '').trim();
-
-        if (text.length > 0) {
-            item.comments.push({
-                id: item.comments.length + 1,
-                author: author,
-                text: text,
-                createdAt: new Date().toLocaleString('ru-RU')
-            });
+    for (const [field, rule] of [
+        ['title', limits.title],
+        ['author', limits.author],
+        ['content', limits.content]
+    ]) {
+        const error = validateText(formData[field], rule);
+        if (error) {
+            return renderAddForm(res, 400, error, formData);
         }
     }
 
-    res.redirect(`/item/${itemId}#comments`);
+    if (imageUrl.length > limits.imageUrl.maxLength) {
+        return renderAddForm(res, 400, limits.imageUrl.errorMessage, formData);
+    }
+    if (imageUrl) {
+        try {
+            const parsedUrl = new URL(imageUrl);
+            if (!['http:', 'https:'].includes(parsedUrl.protocol)) {
+                throw new Error('Unsupported URL protocol');
+            }
+        } catch {
+            return renderAddForm(res, 400, limits.imageUrl.errorMessage, formData);
+        }
+    }
+    if (!allowedPaperTypes.includes(paperType)) {
+        return renderAddForm(res, 400, limits.paperTypeErrorMessage, formData);
+    }
+
+    try {
+        const latestSketch = await Sketch.findOne({
+            attributes: ['createdAt'],
+            order: [['createdAt', 'DESC']]
+        });
+        const latestTime = latestSketch ? new Date(latestSketch.createdAt).getTime() + 1 : 0;
+        const createdAt = new Date(Math.max(Date.now(), latestTime));
+
+        await Sketch.create({
+            ...formData,
+            imageUrl: imageUrl || null,
+            warmth: 1,
+            readingTime: Math.max(1, Math.ceil(countWords(formData.content) / limits.readingSpeedWpm)),
+            createdAt
+        });
+        res.redirect('/');
+    } catch (error) {
+        next(error);
+    }
 });
 
-app.get('/messages', (req, res) => {
-    const activeUser = req.query.user || 'Lydia';
-    res.render('messages', {
-        title: 'Сообщения — The Attic',
-        activeUser: activeUser
-    });
+app.get('/item/:id', async (req, res, next) => {
+    try {
+        const item = await Sketch.findByPk(req.params.id, {
+            include: [{
+                model: Comment,
+                as: 'comments',
+                separate: true,
+                order: [['createdAt', 'DESC']]
+            }]
+        });
+        if (!item) {
+            return next();
+        }
+
+        res.render('item', {
+            title: `${item.title} — The Attic`,
+            item: withDisplayData(item)
+        });
+    } catch (error) {
+        next(error);
+    }
 });
 
-app.post('/messages/send', (req, res) => {
-    const toUser = req.body.toUser || 'Lydia';
-    res.redirect(`/messages?user=${encodeURIComponent(toUser)}`);
+app.post('/item/:id/comment', async (req, res, next) => {
+    const author = typeof req.body.commentAuthor === 'string' ? req.body.commentAuthor.trim() : '';
+    const text = typeof req.body.commentText === 'string' ? req.body.commentText.trim() : '';
+    const authorError = validateText(author, limits.commentAuthor);
+    const textError = validateText(text, limits.commentText);
+
+    try {
+        const item = await Sketch.findByPk(req.params.id, {
+            include: [{
+                model: Comment,
+                as: 'comments',
+                separate: true,
+                order: [['createdAt', 'DESC']]
+            }]
+        });
+        if (!item) {
+            return next();
+        }
+
+        if (authorError || textError) {
+            return res.status(400).render('item', {
+                title: `${item.title} — The Attic`,
+                item: withDisplayData(item),
+                commentError: authorError || textError,
+                commentDraft: { author, text }
+            });
+        }
+
+        await Comment.create({ author, text, sketchId: item.id });
+        res.redirect(`/item/${item.id}#comments`);
+    } catch (error) {
+        next(error);
+    }
 });
 
-app.get('/trigger-error', (req, res, next) => {
-    const demoError = new Error("Тестовый сбой: на чердаке перегорела лампа накаливания!");
-    next(demoError); // Напрямую передаем ошибку в 500 middleware
+app.get('/messages', async (req, res, next) => {
+    try {
+        const activeUser = typeof req.query.user === 'string' && req.query.user.trim()
+            ? req.query.user.trim().slice(0, limits.messageUser.maxLength)
+            : 'Lydia';
+        const currentUser = req.user.name;
+        const messages = await Message.findAll({
+            where: {
+                [Op.or]: [
+                    { fromUser: currentUser, toUser: activeUser },
+                    { fromUser: activeUser, toUser: currentUser }
+                ]
+            },
+            order: [['createdAt', 'ASC']]
+        });
+
+        res.render('messages', {
+            title: 'Сообщения — The Attic',
+            activeUser,
+            messages
+        });
+    } catch (error) {
+        next(error);
+    }
 });
 
-app.use((req, res, next) => {
+app.post('/messages/send', async (req, res, next) => {
+    const toUser = typeof req.body.toUser === 'string' ? req.body.toUser.trim() : '';
+    const messageText = typeof req.body.messageText === 'string' ? req.body.messageText.trim() : '';
+    const userError = validateText(toUser, limits.messageUser);
+    const messageError = validateText(messageText, limits.messageText);
+
+    if (userError || messageError) {
+        return res.status(400).send(userError || messageError);
+    }
+
+    try {
+        await Message.create({
+            fromUser: req.user.name,
+            toUser,
+            messageText
+        });
+        res.redirect(`/messages?user=${encodeURIComponent(toUser)}`);
+    } catch (error) {
+        next(error);
+    }
+});
+
+app.use((req, res) => {
     res.status(404).render('404', {
-        title: '404 — Набросок не найден'
+        title: '404 — Страница не найдена'
     });
 });
 
 app.use((err, req, res, next) => {
-    console.error(`💥 [ERROR 500]: ${err.message}`);
+    const statusCode = Number.isInteger(err.status) && err.status >= 400 && err.status < 500
+        ? err.status
+        : 500;
+    console.error(`💥 [ERROR ${statusCode}]: ${err.message}`);
     console.error(err.stack);
 
-    res.status(500).render('500', {
-        title: '500 — Сбой на чердаке',
-        error: err
+    if (res.headersSent) {
+        return next(err);
+    }
+
+    if (statusCode !== 500) {
+        const message = statusCode === 413
+            ? 'Тело запроса слишком большое. Уменьшите размер данных и повторите попытку.'
+            : 'Некорректный запрос. Проверьте отправленные данные и повторите попытку.';
+        return res.status(statusCode).type('html').send(
+            '<!doctype html><html lang="ru"><meta charset="utf-8"><meta name="viewport" content="width=device-width">' +
+            '<title>Ошибка запроса — The Attic</title><link rel="stylesheet" href="/css/style.css"><body>' +
+            `<main class="container"><section class="error-card error-card-404"><h1 class="error-title">${statusCode}</h1>` +
+            `<p class="error-subtitle">${message}</p><a class="btn-primary" href="/">Вернуться в ленту</a></section></main></body></html>`
+        );
+    }
+
+    res.status(statusCode).render('500', {
+        title: '500 — Сбой на чердаке'
+    }, (renderError, html) => {
+        if (renderError) {
+            console.error('Не удалось отобразить шаблон 500:', renderError);
+            return res.status(500).type('html').send(
+                '<!doctype html><html lang="ru"><meta charset="utf-8"><title>500 — The Attic</title>' +
+                '<link rel="stylesheet" href="/css/style.css"><body><main class="container">' +
+                '<section class="error-card error-card-500"><span class="error-code">500</span>' +
+                '<h1 class="error-title">На чердаке перегорела лампа</h1>' +
+                '<p class="error-subtitle">Внутренняя ошибка сервера. Проверьте подключение к базе данных и повторите запрос.</p>' +
+                '<a class="btn-primary" href="/">Вернуться в ленту</a></section></main></body></html>'
+            );
+        }
+        res.type('html').send(html);
     });
 });
 
 app.listen(PORT, async () => {
     try {
         await sequelize.authenticate();
-        console.log(`=========================================`);
-        console.log(`База данных PostgreSQL успешно подключена!`);
-        console.log(`Сервер "The Attic" запущен: http://localhost:${PORT}`);
-        console.log(`Ветка: pz21 (Вариант 19)`);
-        console.log(`=========================================`);
+        console.log('База данных PostgreSQL успешно подключена!');
     } catch (error) {
         console.error('Ошибка подключения к базе данных:', error.message);
     }
+    console.log(`Сервер "The Attic" запущен: http://localhost:${PORT}`);
+    console.log('Ветка: pz21 (четный вариант — логирование в БД)');
 });
+
+module.exports = app;

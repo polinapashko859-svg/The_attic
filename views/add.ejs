@@ -1,8 +1,8 @@
 <%- include('partials/header', { title: 'Новый набросок — The Attic' }) %>
 
 <div style="max-width: 680px; margin: 0 auto;">
-    <h1 class="page-title" style="font-size: 2.8rem;">Оставить набросок</h1>
-    <p class="page-subtitle">Добавьте новую мысль, заметку или архивную находку на чердак.</p>
+    <h1 class="page-title" style="font-size: 2.8rem;">Новая публикация</h1>
+    <p class="page-subtitle">Поделитесь мыслью, заметкой или архивной находкой с лентой.</p>
 
     <% if (typeof error !== 'undefined' && error) { %>
         <div class="custom-alert-error">
@@ -11,21 +11,21 @@
         </div>
     <% } %>
 
-    <form action="/add" method="POST" class="form-card" novalidate>
+    <form action="/add" method="POST" class="form-card">
         
         <div class="form-group">
-            <label for="title">Заголовок наброска <span class="required-star">*</span></label>
+            <label for="title">Заголовок публикации <span class="required-star">*</span></label>
             <input type="text" id="title" name="title" class="form-control" 
-                   value="<%= typeof formData !== 'undefined' ? formData.title : '' %>" 
-                   placeholder="Например: Старинный компас с чердака">
+                   value="<%= typeof formData !== 'undefined' && formData.title ? formData.title : '' %>"
+                   placeholder="Например: Старинный компас с чердака" minlength="3" maxlength="50" required>
             <span class="field-hint">От 3 до 50 символов</span>
         </div>
 
         <div class="form-group">
             <label for="author">Ваше имя или псевдоним <span class="required-star">*</span></label>
             <input type="text" id="author" name="author" class="form-control" 
-                   value="<%= typeof formData !== 'undefined' ? formData.author : '' %>" 
-                   placeholder="Например: Polina">
+                   value="<%= typeof formData !== 'undefined' && formData.author ? formData.author : '' %>"
+                   placeholder="Например: Polina" minlength="2" maxlength="30" required>
         </div>
 
         <div class="form-row-2col">
@@ -40,12 +40,17 @@
             </div>
 
             <div class="form-group">
-                <label for="views">Начальные просмотры (≥ 0):</label>
-                <input type="number" id="views" name="views" class="form-control" 
-                    min="0" max="1000000"
-                    oninput="if (this.value.length > 7) this.value = this.value.slice(0, 7);"
-                    value="<%= typeof formData !== 'undefined' && formData.views ? formData.views : 0 %>">
-                <span class="field-hint">Целое число от 0 до 1 000 000 (максимум 7 цифр)</span>
+                <label>Время чтения</label>
+                <span class="form-control" id="readingEstimate" aria-live="polite">Около 1 мин. чтения</span>
+                <span class="field-hint">Рассчитывается автоматически по тексту публикации</span>
+            </div>
+        </div>
+
+        <div class="paper-preview paper-card-parchment" id="paperPreview" aria-live="polite">
+            <span class="paper-preview-icon" aria-hidden="true">✦</span>
+            <div>
+                <strong id="paperPreviewTitle">Пергамент</strong>
+                <p id="paperPreviewDescription">Тёплая архивная бумага с мягким золотистым оттенком.</p>
             </div>
         </div>
 
@@ -53,25 +58,54 @@
             <label for="imageUrl">Ссылка на изображение (необязательно):</label>
             <input type="url" id="imageUrl" name="imageUrl" class="form-control" 
                    value="<%= typeof formData !== 'undefined' && formData.imageUrl ? formData.imageUrl : '' %>" 
-                   placeholder="https://i.pinimg.com/...jpg">
+                   placeholder="https://i.pinimg.com/...jpg" maxlength="2048">
             <span class="field-hint">Вставьте прямую ссылку на фото из Pinterest или интернета</span>
         </div>
 
         <div class="form-group">
-            <label for="content">Текст наброска <span class="required-star">*</span></label>
+            <label for="content">Текст публикации <span class="required-star">*</span></label>
             <textarea id="content" name="content" rows="6" class="form-control" 
-                      placeholder="Опишите ваши мысли, найденные вещи или воспоминания..."><%= typeof formData !== 'undefined' ? formData.content : '' %></textarea>
+                      placeholder="Опишите ваши мысли, найденные вещи или воспоминания..." minlength="5" maxlength="500" required><%= typeof formData !== 'undefined' && formData.content ? formData.content : '' %></textarea>
             <span class="field-hint">От 5 до 500 символов</span>
         </div>
 
         <div class="form-actions">
             <button type="submit" class="btn-primary">
                 <svg class="action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
-                Опубликовать набросок
+                Опубликовать
             </button>
             <a href="/" class="btn-cancel">Отмена</a>
         </div>
     </form>
 </div>
+
+<script>
+    const readingContent = document.getElementById('content');
+    const readingEstimate = document.getElementById('readingEstimate');
+    const readingSpeed = <%= readingSpeedWpm %>;
+    const paperTypeSelect = document.getElementById('paperType');
+    const paperPreview = document.getElementById('paperPreview');
+    const paperPreviewTitle = document.getElementById('paperPreviewTitle');
+    const paperPreviewDescription = document.getElementById('paperPreviewDescription');
+    const paperDetails = {
+        parchment: ['Пергамент', 'Тёплая архивная бумага с мягким золотистым оттенком.'],
+        kraft: ['Крафт', 'Натуральная фактура с древесными и медовыми оттенками.'],
+        linen: ['Лён', 'Спокойная тканая фактура в прохладных серо-пепельных тонах.'],
+        'pressed-flower': ['Сухоцветы', 'Нежный розовый лист с ботаническим настроением.']
+    };
+
+    paperTypeSelect.addEventListener('change', () => {
+        const [name, description] = paperDetails[paperTypeSelect.value];
+        paperPreview.className = `paper-preview paper-card-${paperTypeSelect.value}`;
+        paperPreviewTitle.textContent = name;
+        paperPreviewDescription.textContent = description;
+    });
+
+    readingContent.addEventListener('input', () => {
+        const words = readingContent.value.trim().match(/[\p{L}\p{N}]+/gu) || [];
+        const minutes = Math.max(1, Math.ceil(words.length / readingSpeed));
+        readingEstimate.textContent = `Около ${minutes} мин. чтения`;
+    });
+</script>
 
 <%- include('partials/footer') %>

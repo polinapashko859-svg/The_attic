@@ -1,7 +1,7 @@
 <%- include('partials/header', { title: item.title + ' — The Attic' }) %>
 
 <div style="max-width: 760px; margin: 0 auto;">
-    <article class="sketch-card item-detail-card paper-card-<%= item.paperType %>">
+    <article class="sketch-card item-detail-card paper-card-<%= item.paperTypeClass %>">
         
         <div class="card-header-user">
             <div class="author-avatar" title="<%= item.author %>">
@@ -9,17 +9,17 @@
             </div>
             <div class="author-info">
                 <span class="author-name" style="font-size: 1.05rem;"><%= item.author %></span>
-                <span class="post-time"><%= item.createdAt %></span>
+                <span class="post-time">Создано: <%= item.createdAtLabel %></span>
             </div>
-            <span class="tag-paper paper-<%= item.paperType %>"><%= item.paperType %></span>
+            <span class="tag-paper paper-<%= item.paperTypeClass %>"><%= item.paperTypeLabel %></span>
         </div>
 
         <h1 class="sketch-title" style="font-size: 2.7rem; margin: 15px 0 10px;"><%= item.title %></h1>
         
         <div class="sketch-meta" style="margin-bottom: 20px;">
             <span class="meta-item">
-                <svg class="action-icon" viewBox="0 0 24 24" fill="none" stroke="#9c8978" stroke-width="2"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
-                <%= item.views %> просмотров
+                <svg class="action-icon" viewBox="0 0 24 24" fill="none" stroke="#9c8978" stroke-width="2"><path d="M4 5h16M4 10h16M4 15h10M4 20h6"/></svg>
+                <%= item.readingMinutes %> мин. чтения
             </span>
             <span class="meta-item">
                 <span class="candle-icon">🕯️</span>
@@ -49,6 +49,10 @@
 
         <div class="comments-section" id="comments">
             <h3 class="comments-title">Отклики на набросок (<%= item.comments ? item.comments.length : 0 %>)</h3>
+
+            <% if (typeof commentError !== 'undefined' && commentError) { %>
+                <div class="custom-alert-error" role="alert"><%= commentError %></div>
+            <% } %>
             
             <% if (item.comments && item.comments.length > 0) { %>
                 <% item.comments.forEach(comment => { %>
@@ -71,8 +75,12 @@
 
             <form action="/item/<%= item.id %>/comment" method="POST" class="add-comment-form">
                 <div class="comment-input-row">
-                    <input type="text" name="commentAuthor" class="form-control" placeholder="Ваше имя" required>
-                    <input type="text" name="commentText" class="form-control" placeholder="Оставьте отклик, мысль или цитату..." required>
+                    <input type="text" name="commentAuthor" class="form-control" placeholder="Ваше имя"
+                           value="<%= typeof commentDraft !== 'undefined' && commentDraft.author ? commentDraft.author : '' %>"
+                           minlength="2" maxlength="30" pattern=".*\S.*" title="Введите имя без одних пробелов" required>
+                    <input type="text" name="commentText" class="form-control" placeholder="Оставьте отклик, мысль или цитату..."
+                           value="<%= typeof commentDraft !== 'undefined' && commentDraft.text ? commentDraft.text : '' %>"
+                           minlength="1" maxlength="500" pattern=".*\S.*" title="Отклик не может состоять только из пробелов" required>
                 </div>
                 <button type="submit" class="btn-primary" style="align-self: flex-start; padding: 9px 20px; font-size: 0.88rem; margin-top: 4px;">
                     Оставить отклик

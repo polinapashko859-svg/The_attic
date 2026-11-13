@@ -10,14 +10,21 @@ module.exports = (sequelize, DataTypes) => {
      * The `models/index` file will call this method automatically.
      */
     static associate(models) {
-      // define association here
+      Sketch.hasMany(models.Comment, { foreignKey: 'sketchId', as: 'comments' });
     }
   }
   Sketch.init({
     title: DataTypes.STRING,
     content: DataTypes.TEXT,
     author: DataTypes.STRING,
-    paperType: DataTypes.STRING
+    paperType: DataTypes.STRING,
+    imageUrl: DataTypes.STRING(2048),
+    readingTime: DataTypes.INTEGER,
+    warmth: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 1
+    }
   }, {
     sequelize,
     modelName: 'Sketch',

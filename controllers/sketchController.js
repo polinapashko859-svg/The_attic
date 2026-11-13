@@ -1,4 +1,41 @@
 const { Sketch } = require('../models');
+const limits = require('../config/limits.json');
+
+const calculateReadingTime = (content) => {
+    const wordCount = (content.match(/[\p{L}\p{N}]+/gu) || []).length;
+    return Math.max(1, Math.ceil(wordCount / limits.readingSpeedWpm));
+};
+
+const validateSketch = ({ title, content, author, paperType, imageUrl }) => {
+    for (const [value, rule] of [
+        [title, limits.title],
+        [content, limits.content],
+        [author, limits.author]
+    ]) {
+        if (typeof value !== 'string' || value.trim().length < rule.minLength || value.trim().length > rule.maxLength) {
+            return rule.errorMessage;
+        }
+    }
+
+    if (!limits.paperTypes.includes(paperType)) {
+        return limits.paperTypeErrorMessage;
+    }
+
+    if (imageUrl !== undefined && imageUrl !== null && imageUrl !== '') {
+        if (typeof imageUrl !== 'string' || imageUrl.length > limits.imageUrl.maxLength) {
+            return limits.imageUrl.errorMessage;
+        }
+        try {
+            if (!['http:', 'https:'].includes(new URL(imageUrl).protocol)) {
+                return limits.imageUrl.errorMessage;
+            }
+        } catch {
+            return limits.imageUrl.errorMessage;
+        }
+    }
+
+    return null;
+};
 
 exports.getAllSketches = async (req, res, next) => {
     try {
@@ -26,16 +63,20 @@ exports.getSketchById = async (req, res, next) => {
 exports.createSketch = async (req, res, next) => {
     try {
         const { title, content, author, paperType } = req.body;
-
-        if (!title || !content) {
-            return res.status(400).json({ error: "Пожалуйста, укажите заголовок и содержание наброска." });
+        const imageUrl = typeof req.body.imageUrl === 'string' ? req.body.imageUrl.trim() : null;
+        const validationError = validateSketch({ title, content, author, paperType, imageUrl });
+        if (validationError) {
+            return res.status(400).json({ error: validationError });
         }
 
         const newSketch = await Sketch.create({
-            title,
-            content,
-            author: author || "Аноним",
-            paperType: paperType || "parchment"
+            title: title.trim(),
+            content: content.trim(),
+            author: author.trim(),
+            paperType,
+            imageUrl,
+            warmth: 1,
+            readingTime: calculateReadingTime(content.trim())
         });
 
         res.status(201).json(newSketch);
@@ -47,9 +88,10 @@ exports.createSketch = async (req, res, next) => {
 exports.updateSketch = async (req, res, next) => {
     try {
         const { title, content, author, paperType } = req.body;
-
-        if (!title || !content) {
-            return res.status(400).json({ error: "Данные для обновления неполные." });
+        const imageUrl = typeof req.body.imageUrl === 'string' ? req.body.imageUrl.trim() : null;
+        const validationError = validateSketch({ title, content, author, paperType, imageUrl });
+        if (validationError) {
+            return res.status(400).json({ error: validationError });
         }
 
         const sketch = await Sketch.findByPk(req.params.id);
@@ -58,10 +100,12 @@ exports.updateSketch = async (req, res, next) => {
         }
 
         await sketch.update({
-            title,
-            content,
-            author: author || sketch.author,
-            paperType: paperType || sketch.paperType
+            title: title.trim(),
+            content: content.trim(),
+            author: author.trim(),
+            paperType,
+            imageUrl,
+            readingTime: calculateReadingTime(content.trim())
         });
 
         res.json(sketch);
