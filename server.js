@@ -1,6 +1,7 @@
 require('dotenv').config();
 const express = require('express');
 const path = require('path');
+const fs = require('fs/promises');
 const { Op } = require('sequelize');
 const { sequelize, Sketch, Comment, Message } = require('./models');
 const sketchRoutes = require('./routes/sketchRoutes');
@@ -12,6 +13,7 @@ const limits = require('./config/limits.json');
 const app = express();
 const PORT = process.env.PORT || 3000;
 const allowedPaperTypes = limits.paperTypes;
+const accessLogPath = path.join(__dirname, 'access.log');
 
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
@@ -103,6 +105,18 @@ app.get('/add', (req, res) => {
 });
 
 app.post('/add', async (req, res, next) => {
+    try {
+        const logFile = await fs.open(accessLogPath, 'r');
+        await logFile.close();
+        await fs.appendFile(
+            accessLogPath,
+            `[${new Date().toLocaleString('ru-RU')}] POST /add\n`,
+            'utf8'
+        );
+    } catch (error) {
+        return next(error);
+    }
+
     const { title, author, paperType, content } = req.body;
     const imageUrl = typeof req.body.imageUrl === 'string' ? req.body.imageUrl.trim() : '';
     const formData = {

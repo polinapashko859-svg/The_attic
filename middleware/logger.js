@@ -11,7 +11,16 @@ const requestLogger = async (req, res, next) => {
         console.log(`📡 [LOG]: [${requestLog.requestedAt.toLocaleString('ru-RU')}] ${requestLog.method} ${requestLog.url}`);
         next();
     } catch (error) {
-        next(error);
+        console.error(
+            `Не удалось записать запрос ${req.method} ${req.originalUrl || req.url} в таблицу логов:`,
+            error.message
+        );
+
+        if (req.method === 'POST' && req.path === '/add') {
+            return next(error);
+        }
+
+        next();
     }
 };
 
