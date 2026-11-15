@@ -1,22 +1,16 @@
 import { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { fetchSketches, deleteSketch, addSketch } from '../api';
 import useDebounce from '../hooks/useDebounce'; 
-
-const BRANCHES = [
-  { id: 'all', label: 'Все ветки', icon: '🗂️' },
-  { id: 'parchment', label: 'Хроники', icon: '📜' },
-  { id: 'kraft', label: 'Странник', icon: '🧭' },
-  { id: 'linen', label: 'Уют', icon: '☕' },
-  { id: 'pressed-flower', label: 'Гербарий', icon: '🌸' }
-];
-
-const PAPER_TYPES = [
-  { value: 'parchment', label: '📜 Старинные хроники' },
-  { value: 'kraft', label: '🧭 Дневник странника' },
-  { value: 'linen', label: '☕ Уютные мысли' },
-  { value: 'pressed-flower', label: '🌸 Гербарий воспоминаний' }
-];
+import { normalizeSketchBranch, SKETCH_BRANCHES } from '../constants/sketchBranches';
+import UserAvatar from './UserAvatar';
+import {
+  CONTENT_MAX_LENGTH,
+  CONTENT_MIN_LENGTH,
+  IMAGE_URL_MAX_LENGTH,
+  TITLE_MAX_LENGTH,
+  TITLE_MIN_LENGTH
+} from '../constants/sketchLimits';
 
 export default function SketchList({ user }) {
   const [sketches, setSketches] = useState([]);
@@ -37,6 +31,8 @@ export default function SketchList({ user }) {
   const [newContent, setNewContent] = useState('');
   const [newPaper, setNewPaper] = useState('parchment');
   const [newImage, setNewImage] = useState('');
+  const [formError, setFormError] = useState('');
+  const [isCreating, setIsCreating] = useState(false);
 
   const menuRef = useRef(null);
   const navigate = useNavigate();
@@ -95,7 +91,7 @@ export default function SketchList({ user }) {
     try {
       await deleteSketch(sketchToDelete.id);
       showToast("Набросок удален");
-    } catch (err) {
+    } catch {
       setSketches((prev) => [sketchToDelete, ...prev]);
       showToast("Ошибка удаления. Набросок восстановлен.");
     }
@@ -103,28 +99,38 @@ export default function SketchList({ user }) {
 
   const handleCreate = async (e) => {
     e.preventDefault();
-    if (!newTitle.trim() || !newContent.trim()) return;
+    const title = newTitle.trim();
+    const content = newContent.trim();
+    const imageUrl = newImage.trim() || null;
 
-    const words = newContent.trim().split(/\s+/).length;
+    if (title.length < TITLE_MIN_LENGTH || title.length > TITLE_MAX_LENGTH) {
+      setFormError(`Заголовок должен содержать от ${TITLE_MIN_LENGTH} до ${TITLE_MAX_LENGTH} символов.`);
+      return;
+    }
+    if (content.length < CONTENT_MIN_LENGTH || content.length > CONTENT_MAX_LENGTH) {
+      setFormError(`Текст должен содержать от ${CONTENT_MIN_LENGTH} до ${CONTENT_MAX_LENGTH} символов.`);
+      return;
+    }
+
+    const words = content.split(/\s+/).length;
     const readingTime = Math.ceil(words / 150) || 1;
     const tempId = `temp-${Date.now()}`;
 
     const optimisticSketch = {
       id: tempId,
-      title: newTitle,
-      content: newContent,
+      title,
+      content,
       author: user.name || "Аноним",
       paperType: newPaper,
       readingTime,
-      imageUrl: newImage || null,
+      imageUrl,
       createdAt: new Date().toISOString(),
       userId: user.id
     };
 
     setSketches((prev) => [optimisticSketch, ...prev]);
-    setIsCreateOpen(false); 
-
-    setNewTitle(''); setNewContent(''); setNewImage(''); setNewPaper('parchment');
+    setIsCreating(true);
+    setFormError('');
 
     try {
       const response = await addSketch({
@@ -138,15 +144,22 @@ export default function SketchList({ user }) {
       setSketches((prev) => 
         prev.map(item => item.id === tempId ? response.data : item)
       );
+      setIsCreateOpen(false);
+      setNewTitle('');
+      setNewContent('');
+      setNewImage('');
+      setNewPaper('parchment');
       showToast("Набросок успешно создан!");
     } catch (err) {
       setSketches((prev) => prev.filter(item => item.id !== tempId));
-      showToast("Ошибка при создании. Набросок не сохранен.");
+      setFormError(err.response?.data?.error || "Не удалось создать публикацию. Попробуйте ещё раз.");
+    } finally {
+      setIsCreating(false);
     }
   };
 
   const filteredSketches = sketches
-    .filter((sketch) => filterPaper === 'all' || sketch.paperType === filterPaper)
+    .filter((sketch) => filterPaper === 'all' || normalizeSketchBranch(sketch.paperType) === filterPaper)
     .sort((a, b) => {
       if (sortBy === 'newest') return b.id.toString().localeCompare(a.id.toString());
       if (sortBy === 'oldest') return a.id.toString().localeCompare(b.id.toString());
@@ -173,54 +186,115 @@ export default function SketchList({ user }) {
 
       {isCreateOpen && (
         <div className="modal-overlay">
-          <form className="modal-content" onSubmit={handleCreate} style={{ maxWidth: '600px', textAlign: 'left' }}>
+          <form className="modal-content create-sketch-form" onSubmit={handleCreate}>
             <h3 style={{ textAlign: 'center' }}>Новый набросок</h3>
+            {formError && <p className="form-error" role="alert">{formError}</p>}
             <div className="form-group">
               <label>Заголовок:</label>
-              <input className="form-control" value={newTitle} onChange={e => setNewTitle(e.target.value)} required />
+              <input
+                className="form-control"
+                value={newTitle}
+                onChange={e => { setNewTitle(e.target.value); setFormError(''); }}
+                minLength={TITLE_MIN_LENGTH}
+                maxLength={TITLE_MAX_LENGTH}
+                required
+              />
+              <span className="field-hint">{newTitle.length}/{TITLE_MAX_LENGTH} символов</span>
             </div>
             <div className="form-group">
               <label>Ветка:</label>
               <select className="form-control" value={newPaper} onChange={e => setNewPaper(e.target.value)}>
-                {PAPER_TYPES.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
+                {SKETCH_BRANCHES.map(branch => (
+                  <option key={branch.value} value={branch.value}>{branch.icon} {branch.label}</option>
+                ))}
               </select>
+              <p className="branch-hint">
+                {SKETCH_BRANCHES.find(branch => branch.value === newPaper)?.hint}
+              </p>
             </div>
             <div className="form-group">
               <label>Ссылка на фото:</label>
-              <input className="form-control" value={newImage} onChange={e => setNewImage(e.target.value)} />
+              <input
+                type="url"
+                className="form-control"
+                value={newImage}
+                onChange={e => { setNewImage(e.target.value); setFormError(''); }}
+                maxLength={IMAGE_URL_MAX_LENGTH}
+                placeholder="https://..."
+              />
             </div>
             <div className="form-group">
               <label>Текст:</label>
-              <textarea className="form-control" rows="5" value={newContent} onChange={e => setNewContent(e.target.value)} required />
+              <textarea
+                className="form-control"
+                rows="5"
+                value={newContent}
+                onChange={e => { setNewContent(e.target.value); setFormError(''); }}
+                minLength={CONTENT_MIN_LENGTH}
+                maxLength={CONTENT_MAX_LENGTH}
+                required
+              />
+              <span className="field-hint">{newContent.length}/{CONTENT_MAX_LENGTH} символов</span>
             </div>
             <div className="modal-actions">
-              <button type="submit" className="btn-primary">Опубликовать</button>
-              <button type="button" className="btn-cancel" onClick={() => setIsCreateOpen(false)}>Отмена</button>
+              <button type="submit" className="btn-primary" disabled={isCreating}>
+                {isCreating ? 'Публикуем...' : 'Опубликовать'}
+              </button>
+              <button type="button" className="btn-cancel" onClick={() => setIsCreateOpen(false)} disabled={isCreating}>Отмена</button>
             </div>
           </form>
         </div>
       )}
 
-      <div className="branches-nav" style={{ justifyContent: 'space-between' }}>
-        <div style={{ display: 'flex', gap: '12px' }}>
-          {BRANCHES.map((branch) => (
-            <button
-              key={branch.id}
-              type="button"
-              className={`branch-tab ${filterPaper === branch.id ? 'active' : ''}`}
-              onClick={() => setFilterPaper(branch.id)}
-            >
-              <span className="branch-icon">{branch.icon}</span>
-              <span className="branch-label">{branch.label}</span>
-            </button>
-          ))}
+      <div className="feed-toolbar">
+        <div>
+          <h1>Лента чердака</h1>
+          <p>Истории, мысли и воспоминания из разных уголков чердака.</p>
         </div>
         {user && (
-          <button className="btn-primary" onClick={() => setIsCreateOpen(true)}>
+          <button className="btn-primary feed-create-button" onClick={() => { setFormError(''); setIsCreateOpen(true); }}>
             + Написать
           </button>
         )}
       </div>
+
+      <section className="branch-browser">
+        <div className="branch-browser-heading">
+          <div>
+            <span className="branch-eyebrow">АРХИВ ЧЕРДАКА</span>
+            <h2>Выберите свою ветку</h2>
+            <p>У каждой истории — своя бумага, настроение и глава.</p>
+          </div>
+          <button
+            type="button"
+            className={`branch-all-button ${filterPaper === 'all' ? 'active' : ''}`}
+            aria-pressed={filterPaper === 'all'}
+            onClick={() => setFilterPaper('all')}
+          >
+            Все истории <span aria-hidden="true">↗</span>
+          </button>
+        </div>
+        <div className="branches-nav" role="group" aria-label="Фильтр по веткам">
+          {SKETCH_BRANCHES.map((branch, index) => (
+            <button
+              key={branch.value}
+              type="button"
+              className={`branch-card branch-${branch.value} ${filterPaper === branch.value ? 'active' : ''}`}
+              data-index={`0${index + 1}`}
+              aria-pressed={filterPaper === branch.value}
+              onClick={() => setFilterPaper(branch.value)}
+            >
+              <span className="branch-card-top">
+                <span className="branch-card-index">ГЛАВА 0{index + 1}</span>
+                <span className="branch-card-mark" aria-hidden="true">{branch.icon}</span>
+              </span>
+              <span className="branch-card-title">{branch.shortLabel}</span>
+              <span className="branch-card-description">{branch.hint}</span>
+              <span className="branch-card-open">Открыть ветку <span aria-hidden="true">↗</span></span>
+            </button>
+          ))}
+        </div>
+      </section>
 
       <div className="filter-panel">
         <div className="filter-group">
@@ -252,19 +326,33 @@ export default function SketchList({ user }) {
           {filteredSketches.map((sketch) => {
             const isOwner = user && sketch.userId === user.id;
             const canEdit = isOwner || (user && user.role === 'admin');
+            const profileId = sketch.userId || sketch.user?.id;
+            const author = sketch.user?.name || sketch.author || 'Аноним';
 
             return (
               <article 
                 key={sketch.id} 
-                className={`sketch-card paper-card-${sketch.paperType}`}
+                className={`sketch-card paper-card-${normalizeSketchBranch(sketch.paperType)}`}
                 onClick={() => !sketch.id.toString().startsWith('temp-') && navigate(`/sketch/${sketch.id}`)}
               >
                 <div className="card-header-user" onClick={(e) => e.stopPropagation()}>
-                  <div className="author-avatar">{sketch.author ? sketch.author[0].toUpperCase() : 'A'}</div>
-                  <div className="author-info">
-                    <span className="author-name">{sketch.author}</span>
-                    <span className="post-time">{new Date(sketch.createdAt).toLocaleString('ru-RU')}</span>
-                  </div>
+                  {profileId ? (
+                    <Link to={`/users/${profileId}`} className="author-profile-link" aria-label={`Профиль автора ${author}`}>
+                      <UserAvatar user={{ name: author, avatarUrl: sketch.user?.avatarUrl }} className="author-avatar" />
+                      <span className="author-info">
+                        <span className="author-name">{author}</span>
+                        <span className="post-time">{new Date(sketch.createdAt).toLocaleString('ru-RU')}</span>
+                      </span>
+                    </Link>
+                  ) : (
+                    <>
+                      <UserAvatar user={{ name: author }} className="author-avatar" />
+                      <div className="author-info">
+                        <span className="author-name">{author}</span>
+                        <span className="post-time">{new Date(sketch.createdAt).toLocaleString('ru-RU')}</span>
+                      </div>
+                    </>
+                  )}
                   
                   {canEdit && !sketch.id.toString().startsWith('temp-') && (
                     <div className="card-menu-wrapper" ref={openMenuId === sketch.id ? menuRef : null}>

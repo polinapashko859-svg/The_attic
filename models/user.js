@@ -23,6 +23,15 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.STRING,
       allowNull: true 
     },
+    bio: {
+      type: DataTypes.TEXT,
+      allowNull: false,
+      defaultValue: ''
+    },
+    avatarUrl: {
+      type: DataTypes.STRING,
+      allowNull: true
+    },
     role: {
       type: DataTypes.STRING,
       allowNull: false,

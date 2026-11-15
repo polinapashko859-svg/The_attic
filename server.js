@@ -1,14 +1,23 @@
 require('dotenv').config();
+const http = require('http');
 const express = require('express');
 const cors = require('cors');
 const mongoose = require('mongoose');
+const { Server } = require('socket.io');
 const app = express();
+const server = http.createServer(app);
 const PORT = process.env.PORT || 3000;
 
 const { sequelize } = require('./models');
 const sketchRoutes = require('./routes/sketchRoutes');
 const authRoutes = require('./routes/auth');
 const mongoRoutes = require('./routes/mongoRoutes');
+const registerSketchDiscussion = require('./sockets/sketchDiscussion');
+
+const io = new Server(server, {
+    cors: { origin: process.env.CLIENT_URL || '*' }
+});
+registerSketchDiscussion(io);
 
 mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log('MongoDB connected'))
@@ -26,7 +35,7 @@ app.use((err, req, res, next) => {
     res.status(500).json({ error: "Что-то пошло не так на чердаке... Ошибка сервера." });
 });
 
-app.listen(PORT, async () => {
+server.listen(PORT, async () => {
     try {
         await sequelize.authenticate();
         console.log(`=========================================`);

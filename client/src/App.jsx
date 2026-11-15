@@ -1,23 +1,24 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Routes, Route, Link, Navigate, useNavigate } from 'react-router-dom';
 import SketchList from './components/SketchList';
 import SketchDetail from './components/SketchDetail';
+import MessagesPage from './components/MessagesPage';
+import ProfilePage from './components/ProfilePage';
+import PublicProfilePage from './components/PublicProfilePage';
+import UserAvatar from './components/UserAvatar';
 import { loginUser, registerUser } from './api';
+import { clearSession, readSessionUser, saveSession } from './authStorage';
 import './index.css';
 
 export default function App() {
-  const [user, setUser] = useState(null);
+  const [user, setUser] = useState(readSessionUser);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
   const navigate = useNavigate();
 
-  useEffect(() => {
-    const savedUser = localStorage.getItem('user');
-    if (savedUser) setUser(JSON.parse(savedUser));
-  }, []);
-
   const handleLogout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
+    clearSession();
     setUser(null);
+    setIsMenuOpen(false);
     navigate('/');
   };
 
@@ -34,22 +35,42 @@ export default function App() {
             <span className="logo-text">The Attic</span>
           </Link>
 
-          <nav className="header-nav">
-            <Link to="/" className="nav-link">Лента</Link>
-          </nav>
+          <button
+            type="button"
+            className={`menu-toggle ${isMenuOpen ? 'is-open' : ''}`}
+            aria-label={isMenuOpen ? 'Закрыть меню' : 'Открыть меню'}
+            aria-expanded={isMenuOpen}
+            aria-controls="primary-navigation"
+            onClick={() => setIsMenuOpen((open) => !open)}
+          >
+            <span />
+            <span />
+            <span />
+          </button>
 
-          <div className="user-profile-menu">
-            {user ? (
-              <>
-                <div className="user-info">
-                  <span className="user-avatar-mini">{user.name ? user.name[0].toUpperCase() : user.email[0].toUpperCase()}</span>
-                  <span className="user-email">{user.name || user.email}</span>
-                </div>
-                <button onClick={handleLogout} className="btn-logout">Выйти</button>
-              </>
-            ) : (
-              <Link to="/auth" className="btn-login">Войти</Link>
-            )}
+          <div className={`header-menu ${isMenuOpen ? 'is-open' : ''}`} id="primary-navigation">
+            <nav className="header-nav">
+              <Link to="/" className="nav-link" onClick={() => setIsMenuOpen(false)}>Лента</Link>
+              {user && (
+                <Link to="/messages" className="nav-link" onClick={() => setIsMenuOpen(false)}>
+                  Сообщения
+                </Link>
+              )}
+            </nav>
+
+            <div className="user-profile-menu">
+              {user ? (
+                <>
+                  <Link to="/profile" className="user-info" aria-label="Открыть свой профиль" onClick={() => setIsMenuOpen(false)}>
+                    <UserAvatar user={user} />
+                    <span className="user-email">{user.name || user.email}</span>
+                  </Link>
+                  <button onClick={handleLogout} className="btn-logout">Выйти</button>
+                </>
+              ) : (
+                <Link to="/auth" className="btn-login" onClick={() => setIsMenuOpen(false)}>Войти</Link>
+              )}
+            </div>
           </div>
         </div>
       </header>
@@ -59,6 +80,9 @@ export default function App() {
           <Route path="/" element={<SketchList user={user} />} />
           <Route path="/auth" element={user ? <Navigate to="/" /> : <AuthPage setUser={setUser} />} />
           <Route path="/sketch/:id" element={<SketchDetail user={user} />} />
+          <Route path="/users/:id" element={<PublicProfilePage currentUser={user} />} />
+          <Route path="/messages" element={user ? <MessagesPage user={user} /> : <Navigate to="/auth" />} />
+          <Route path="/profile" element={user ? <ProfilePage onUpdated={setUser} /> : <Navigate to="/auth" />} />
         </Routes>
       </main>
 
@@ -99,8 +123,7 @@ function AuthPage({ setUser }) {
         return;
       }
 
-      localStorage.setItem('token', response.data.token);
-      localStorage.setItem('user', JSON.stringify(response.data.user));
+      saveSession(response.data.user, response.data.token);
       setUser(response.data.user);
       navigate('/');
     } catch (err) {

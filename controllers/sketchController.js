@@ -1,5 +1,6 @@
 const { Sketch, User } = require('../models');
 const { Op } = require('sequelize');
+const validateSketchInput = require('../utils/validateSketchInput');
 
 exports.getAllSketches = async (req, res, next) => {
     try {
@@ -18,7 +19,7 @@ exports.getAllSketches = async (req, res, next) => {
 
         const sketches = await Sketch.findAll({
             where: whereCondition,
-            include: [{ model: User, as: 'user', attributes: ['email'] }],
+            include: [{ model: User, as: 'user', attributes: ['id', 'name', 'avatarUrl'] }],
             order: [['id', 'DESC']]
         });
         res.json(sketches);
@@ -30,7 +31,7 @@ exports.getAllSketches = async (req, res, next) => {
 exports.getSketchById = async (req, res, next) => {
     try {
         const sketch = await Sketch.findByPk(req.params.id, {
-            include: [{ model: User, as: 'user', attributes: ['email'] }]
+            include: [{ model: User, as: 'user', attributes: ['id', 'name', 'avatarUrl'] }]
         });
         if (!sketch) {
             return res.status(404).json({ error: "Набросок не найден в архивах чердака." });
@@ -43,25 +44,30 @@ exports.getSketchById = async (req, res, next) => {
 
 exports.createSketch = async (req, res, next) => {
     try {
-        const { title, content, paperType, readingTime, imageUrl } = req.body;
-
-        if (!title || !content) {
-            return res.status(400).json({ error: "Пожалуйста, укажите заголовок и содержание наброска." });
+        const validation = validateSketchInput(req.body);
+        if (validation.error) {
+            return res.status(400).json({ error: validation.error });
         }
 
         const user = await User.findByPk(req.user.id);
+        if (!user) {
+            return res.status(401).json({ error: "Пользователь не найден. Войдите снова." });
+        }
 
         const newSketch = await Sketch.create({
-            title,
-            content,
+            ...validation.value,
             author: user.name || "Аноним",
-            paperType: paperType || "parchment",
-            readingTime: readingTime || 2,
-            imageUrl: imageUrl || null,
             userId: req.user.id
         });
 
-        res.status(201).json(newSketch);
+        res.status(201).json({
+            ...newSketch.toJSON(),
+            user: {
+                id: user.id,
+                name: user.name,
+                avatarUrl: user.avatarUrl
+            }
+        });
     } catch (err) {
         next(err);
     }
@@ -69,10 +75,9 @@ exports.createSketch = async (req, res, next) => {
 
 exports.updateSketch = async (req, res, next) => {
     try {
-        const { title, content, author, paperType, readingTime, imageUrl } = req.body;
-
-        if (!title || !content) {
-            return res.status(400).json({ error: "Данные для обновления неполные." });
+        const validation = validateSketchInput(req.body, { partial: true });
+        if (validation.error) {
+            return res.status(400).json({ error: validation.error });
         }
 
         const sketch = await Sketch.findByPk(req.params.id);
@@ -85,12 +90,9 @@ exports.updateSketch = async (req, res, next) => {
         }
 
         await sketch.update({
-            title,
-            content,
-            author: author || sketch.author,
-            paperType: paperType || sketch.paperType,
-            readingTime: readingTime !== undefined ? readingTime : sketch.readingTime,
-            imageUrl: imageUrl !== undefined ? imageUrl : sketch.imageUrl
+            ...validation.value,
+            paperType: validation.value.paperType || sketch.paperType,
+            imageUrl: validation.value.imageUrl === undefined ? sketch.imageUrl : validation.value.imageUrl
         });
 
         res.json(sketch);
