@@ -10,6 +10,23 @@ The Attic is a React application for sharing sketches. PostgreSQL (through Seque
 
 The server uses the configured PostgreSQL database for authentication and sketch records. MongoDB must be available for message history.
 
+## Run with Docker Compose
+
+The Compose setup runs the React client behind Nginx, the Node.js API, PostgreSQL, and MongoDB. Nginx serves the frontend and proxies API requests and Socket.IO to the backend.
+
+1. Copy `.env.example` to `.env` and set a private `JWT_SECRET`.
+2. From the project root, run:
+
+   ```sh
+   docker compose up --build
+   ```
+
+3. Open `http://localhost`. The API is also available directly at `http://localhost:3000`; `http://localhost/health` reports whether both databases are connected.
+
+The backend runs Sequelize migrations before starting. PostgreSQL and MongoDB data persist in named volumes. Stop the services with `docker compose down`; `docker compose down -v` also deletes database data. Set `FRONTEND_PORT` or `BACKEND_PORT` in `.env` to change the published host ports.
+
+The images use `node:22-alpine` because the current Vite toolchain requires a newer Node.js than Node 18. Docker pulls `postgres:15-alpine`, `mongo:7`, and `nginx:alpine` from Docker Hub. If Docker Hub is inaccessible, configure a registry mirror in the Docker daemon or use an accessible registry.
+
 ## Real-time sketch discussions
 
 Each sketch detail page has a separate Socket.IO discussion room. Anyone can join and read the latest 100 messages; sending a message requires a valid login token. Discussion messages are stored in MongoDB and broadcast to users in that sketch's room. Presence counts and join/leave notifications are also sent in real time.

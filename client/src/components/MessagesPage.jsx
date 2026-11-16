@@ -7,7 +7,7 @@ import UserAvatar from './UserAvatar';
 import { getSessionToken } from '../authStorage';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:3000';
-const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || new URL(API_URL).origin;
+const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || new URL(API_URL, window.location.origin).origin;
 
 function mergeMessages(current, incoming) {
   const messages = new Map(current.map((message) => [message._id, message]));

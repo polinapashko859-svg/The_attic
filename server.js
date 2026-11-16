@@ -26,6 +26,19 @@ mongoose.connect(process.env.MONGO_URI)
 app.use(cors()); 
 app.use(express.json());
 
+app.get('/health', async (req, res) => {
+    try {
+        await sequelize.authenticate();
+        if (mongoose.connection.readyState !== 1) {
+            throw new Error('MongoDB is not connected');
+        }
+        res.status(200).json({ status: 'ok' });
+    } catch (error) {
+        console.error('Health check failed:', error.message);
+        res.status(503).json({ status: 'unhealthy' });
+    }
+});
+
 app.use('/auth', authRoutes);
 app.use('/sketches', sketchRoutes);
 app.use('/api/mongo/sketches', mongoRoutes);
